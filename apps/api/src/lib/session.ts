@@ -99,3 +99,18 @@ export function setSessionCookie(reply: FastifyReply, token: string): void {
 export function clearSessionCookie(reply: FastifyReply): void {
   reply.clearCookie(SESSION_COOKIE, { path: '/' });
 }
+
+/**
+ * Beendet alle Sitzungen eines Benutzers ausser der uebergebenen.
+ *
+ * Gedacht fuer den Passwortwechsel: wer das Passwort aendert, soll auf
+ * fremden Geraeten abgemeldet werden -- aber nicht auf dem, an dem er
+ * gerade sitzt. Wuerde man auch die eigene Sitzung loeschen, flaege der
+ * Benutzer unmittelbar nach dem Speichern aus der Anwendung.
+ */
+export async function destroyOtherSessions(userId: string, keepToken: string): Promise<number> {
+  const { count } = await prisma.session.deleteMany({
+    where: { userId, id: { not: hashToken(keepToken) } },
+  });
+  return count;
+}

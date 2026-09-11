@@ -34,6 +34,17 @@ export class ApiService {
     return this.http.post<void>('/api/auth/logout', {});
   }
 
+  /** Antwortet mit der Zahl der Geraete, die dabei abgemeldet wurden. */
+  changePassword(
+    currentPassword: string,
+    newPassword: string,
+  ): Observable<{ abgemeldeteGeraete: number }> {
+    return this.http.post<{ abgemeldeteGeraete: number }>('/api/auth/change-password', {
+      currentPassword,
+      newPassword,
+    });
+  }
+
   listUsers(): Observable<AdminUser[]> {
     return this.http.get<AdminUser[]>('/api/admin/users');
   }

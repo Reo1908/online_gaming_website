@@ -1,15 +1,29 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
-import { burnTiming, verifyPassword } from '../lib/password.js';
+import { burnTiming, hashPassword, verifyPassword } from '../lib/password.js';
 import {
   SESSION_COOKIE,
   clearSessionCookie,
   createSession,
+  destroyOtherSessions,
   destroySession,
   setSessionCookie,
 } from '../lib/session.js';
 import { loadUser, requireAuth } from '../lib/guards.js';
+
+const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, 'Aktuelles Passwort erforderlich').max(256),
+    newPassword: z
+      .string()
+      .min(12, 'Das neue Passwort muss mindestens 12 Zeichen haben')
+      .max(256),
+  })
+  .refine((data) => data.currentPassword !== data.newPassword, {
+    message: 'Das neue Passwort muss sich vom bisherigen unterscheiden',
+    path: ['newPassword'],
+  });
 
 const loginSchema = z.object({
   username: z.string().min(1).max(64),
@@ -73,6 +87,57 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/auth/me', { preHandler: requireAuth }, async (request) => {
     return request.user;
   });
+
+  app.post(
+    '/api/auth/change-password',
+    {
+      preHandler: requireAuth,
+      config: {
+        // Das aktuelle Passwort wird hier geprueft -- ohne Begrenzung waere
+        // das eine bequeme Stelle, um es zu erraten.
+        rateLimit: { max: 10, timeWindow: '15 minutes' },
+      },
+    },
+    async (request, reply) => {
+      const parsed = changePasswordSchema.safeParse(request.body);
+      if (!parsed.success) {
+        const flat = z.flattenError(parsed.error);
+        return reply.code(400).send({
+          error: flat.formErrors[0] ?? 'Ungültige Eingabe',
+          details: flat.fieldErrors,
+        });
+      }
+
+      const { currentPassword, newPassword } = parsed.data;
+      const user = request.user!;
+
+      const record = await prisma.user.findUnique({
+        where: { id: user.id },
+        select: { passwordHash: true },
+      });
+
+      if (!record) {
+        return reply.code(401).send({ error: 'Nicht angemeldet' });
+      }
+
+      // Das aktuelle Passwort ist Pflicht: sonst koennte jemand, der eine
+      // offene Sitzung uebernimmt, den rechtmaessigen Besitzer aussperren.
+      if (!(await verifyPassword(record.passwordHash, currentPassword))) {
+        return reply.code(401).send({ error: 'Aktuelles Passwort ist falsch' });
+      }
+
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash: await hashPassword(newPassword) },
+      });
+
+      // Eigene Sitzung bleibt bestehen, alle anderen Geraete fliegen raus.
+      const token = request.cookies[SESSION_COOKIE]!;
+      const beendet = await destroyOtherSessions(user.id, token);
+
+      return { abgemeldeteGeraete: beendet };
+    },
+  );
 
   // Erlaubt dem Frontend beim Start zu unterscheiden zwischen
   // "nicht eingeloggt" (null) und "Server nicht erreichbar" (Fehler).

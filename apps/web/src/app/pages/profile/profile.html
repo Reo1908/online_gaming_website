@@ -1,23 +1,91 @@
 @if (auth.user(); as user) {
   <h1>Profil</h1>
 
-  <dl class="details">
-    <dt>Anzeigename</dt>
-    <dd>{{ user.displayName }}</dd>
+  <section class="panel">
+    <h2>Konto</h2>
 
-    <dt>Benutzername</dt>
-    <dd>{{ user.username }}</dd>
+    <dl class="details">
+      <dt>Anzeigename</dt>
+      <dd>{{ user.displayName }}</dd>
 
-    <dt>Rolle</dt>
-    <dd>{{ user.role === 'ADMIN' ? 'Administrator' : 'Spieler' }}</dd>
+      <dt>Benutzername</dt>
+      <dd>{{ user.username }}</dd>
 
-    <dt>Benutzer-ID</dt>
-    <dd class="mono">{{ user.id }}</dd>
-  </dl>
+      <dt>Rolle</dt>
+      <dd>{{ user.role === 'ADMIN' ? 'Administrator' : 'Spieler' }}</dd>
 
-  @if (user.role === 'ADMIN') {
-    <p class="admin-hint">
-      Du hast Administratorrechte — <a routerLink="/admin">Benutzer verwalten</a>.
-    </p>
-  }
+      <dt>Benutzer-ID</dt>
+      <dd class="mono">{{ user.id }}</dd>
+    </dl>
+
+    @if (user.role === 'ADMIN') {
+      <p class="admin-hint">
+        Du hast Administratorrechte — <a routerLink="/admin">Benutzer verwalten</a>.
+      </p>
+    }
+  </section>
+
+  <section class="panel">
+    <h2>Passwort ändern</h2>
+
+    <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      @if (error(); as message) {
+        <p-message severity="error" [text]="message" styleClass="full" />
+      }
+      @if (notice(); as message) {
+        <p-message severity="success" [text]="message" styleClass="full" />
+      }
+
+      <div class="field">
+        <label for="currentPassword">Aktuelles Passwort</label>
+        <input
+          pInputText
+          id="currentPassword"
+          type="password"
+          formControlName="currentPassword"
+          autocomplete="current-password"
+        />
+      </div>
+
+      <div class="field">
+        <label for="newPassword">Neues Passwort</label>
+        <input
+          pInputText
+          id="newPassword"
+          type="password"
+          formControlName="newPassword"
+          autocomplete="new-password"
+        />
+        <small>Mindestens 12 Zeichen</small>
+      </div>
+
+      <div class="field">
+        <label for="confirmPassword">Neues Passwort wiederholen</label>
+        <input
+          pInputText
+          id="confirmPassword"
+          type="password"
+          formControlName="confirmPassword"
+          autocomplete="new-password"
+        />
+        <!-- Erst melden, wenn beide Felder angefasst wurden: sonst steht die
+             Warnung schon beim ersten Tastendruck da. -->
+        @if (form.hasError('stimmenNichtUeberein') && form.controls.confirmPassword.touched) {
+          <small class="warn">Die beiden Eingaben stimmen nicht überein</small>
+        }
+      </div>
+
+      <p class="hinweis">
+        Nach der Änderung bleibst du hier angemeldet. Auf allen anderen Geräten wirst du
+        abgemeldet.
+      </p>
+
+      <p-button
+        type="submit"
+        label="Passwort ändern"
+        [loading]="busy()"
+        [disabled]="form.invalid"
+      />
+    </form>
+  </section>
 }
