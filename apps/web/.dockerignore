@@ -1,0 +1,10 @@
+node_modules
+dist
+.angular
+.vscode
+*.log
+Dockerfile
+.dockerignore
+# nginx.conf wird vom Dockerfile kopiert und darf hier NICHT stehen
+# proxy.conf.json gilt nur fuer den Dev-Server
+proxy.conf.json

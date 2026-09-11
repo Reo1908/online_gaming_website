@@ -1,0 +1,6 @@
+# Zugangsdaten fuer Docker Compose -- niemals einchecken
+.env
+
+node_modules/
+dist/
+*.log

@@ -1,0 +1,76 @@
+name: Docker-Images bauen und veroeffentlichen
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      # Ohne diese Berechtigung darf der Workflow nicht in die
+      # GitHub Container Registry schreiben.
+      packages: write
+
+    strategy:
+      # Ein fehlgeschlagenes Image soll das andere nicht mit abbrechen.
+      fail-fast: false
+      matrix:
+        include:
+          - name: api
+            context: ./apps/api
+          - name: web
+            context: ./apps/web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Image-Namen bestimmen
+        # Registry-Namen muessen komplett kleingeschrieben sein, der
+        # GitHub-Benutzername ist es oft nicht.
+        run: echo "IMAGE=${GITHUB_REPOSITORY,,}-${{ matrix.name }}" >> "$GITHUB_ENV"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: An der Registry anmelden
+        # Bei einem Pull Request wird nur gebaut, nicht veroeffentlicht --
+        # deshalb ist die Anmeldung dort nicht noetig.
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          # Wird von GitHub automatisch bereitgestellt, kein eigener Token noetig.
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tags und Metadaten ableiten
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=ref,event=branch
+            type=sha,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Bauen und hochladen
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Spart bei Folgelaeufen den kompletten npm-ci-Schritt.
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}

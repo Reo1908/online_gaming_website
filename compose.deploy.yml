@@ -1,0 +1,63 @@
+# Fuer den Server: zieht fertige Images aus der Registry, statt zu bauen.
+# Auf dem Zielrechner werden nur diese Datei und eine .env gebraucht --
+# kein Quelltext, kein Node, kein Compiler.
+#
+#   docker compose -f compose.deploy.yml pull
+#   docker compose -f compose.deploy.yml up -d
+#
+# IMAGE_TAG in der .env steuert, welche Version laeuft. Ein Zurueckrollen
+# ist damit ein Tag-Wechsel plus erneutes `up -d`.
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    image: ghcr.io/${GITHUB_REPOSITORY}-api:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      SESSION_SECRET: ${SESSION_SECRET}
+      APP_ORIGIN: ${APP_ORIGIN}
+      NODE_ENV: production
+      PORT: 3000
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+    expose:
+      - '3000'
+
+  web:
+    image: ghcr.io/${GITHUB_REPOSITORY}-web:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+    ports:
+      # In Produktion sinnvollerweise an 127.0.0.1 binden und einen
+      # TLS-Proxy (Caddy, Traefik, nginx) davorsetzen -- das Session-Cookie
+      # bekommt sein Secure-Flag nur bei einem https-APP_ORIGIN.
+      - '${WEB_PORT:-8080}:80'
+
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
