@@ -88,6 +88,49 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
   // Gilt fuer jede Route in diesem Plugin-Scope, auch fuer spaeter ergaenzte.
   app.addHook('preHandler', requireAdmin);
 
+  /**
+   * Ausfuehrlicher Systemzustand, nur fuer Administratoren.
+   *
+   * /api/health bleibt bewusst offen und schlank: den Endpunkt fragt der
+   * Healthcheck des Containers ab, der sich nicht anmelden kann. Alles, was
+   * darueber hinaus Auskunft gibt, steht hier hinter der Rollenpruefung.
+   */
+  app.get('/api/admin/status', async () => {
+    const start = Date.now();
+    let datenbankOnline = true;
+
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+    } catch {
+      datenbankOnline = false;
+    }
+
+    const antwortzeitMs = Date.now() - start;
+
+    const [benutzer, aktiveSitzungen] = datenbankOnline
+      ? await Promise.all([
+          prisma.user.count(),
+          prisma.session.count({ where: { expiresAt: { gt: new Date() } } }),
+        ])
+      : [null, null];
+
+    return {
+      api: {
+        status: 'online' as const,
+        laufzeitSekunden: Math.floor(process.uptime()),
+        umgebung: process.env.NODE_ENV ?? 'development',
+        nodeVersion: process.version,
+      },
+      datenbank: {
+        status: datenbankOnline ? ('online' as const) : ('offline' as const),
+        antwortzeitMs,
+        benutzer,
+        aktiveSitzungen,
+      },
+      zeitpunkt: new Date().toISOString(),
+    };
+  });
+
   app.get('/api/admin/users', async () => {
     return prisma.user.findMany({
       select: PUBLIC_USER_FIELDS,

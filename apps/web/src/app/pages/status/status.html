@@ -1,0 +1,90 @@
+<div class="kopf">
+  <div>
+    <h1>Systemstatus</h1>
+    <p class="unter">Nur für Administratoren sichtbar.</p>
+  </div>
+
+  <p-button
+    label="Aktualisieren"
+    icon="pi pi-refresh"
+    severity="secondary"
+    [outlined]="true"
+    size="small"
+    [loading]="zustand().art === 'laedt'"
+    (onClick)="laden()"
+  />
+</div>
+
+@switch (zustand().art) {
+  @case ('laedt') {
+    <p class="muted">Wird geprüft …</p>
+  }
+
+  @case ('fehler') {
+    <p-card styleClass="karte">
+      <div class="zeile">
+        <span class="punkt offline"></span>
+        <strong>Backend nicht erreichbar</strong>
+      </div>
+      <p class="muted hinweis">
+        Läuft der Container? Prüfen mit <code>docker compose ps</code>, Ausgabe mit
+        <code>docker compose logs -f api</code>.
+      </p>
+    </p-card>
+  }
+
+  @case ('ok') {
+    @if (zustand(); as z) {
+      @if (z.art === 'ok') {
+        <div class="raster">
+          <p-card styleClass="karte">
+            <ng-template #title>
+              <div class="karten-kopf">
+                <span><i class="pi pi-server"></i> Backend</span>
+                <p-tag severity="success" value="online" />
+              </div>
+            </ng-template>
+
+            <dl class="werte">
+              <dt>Laufzeit</dt>
+              <dd>{{ laufzeit(z.daten.api.laufzeitSekunden) }}</dd>
+
+              <dt>Umgebung</dt>
+              <dd>{{ z.daten.api.umgebung }}</dd>
+
+              <dt>Node</dt>
+              <dd class="mono">{{ z.daten.api.nodeVersion }}</dd>
+            </dl>
+          </p-card>
+
+          <p-card styleClass="karte">
+            <ng-template #title>
+              <div class="karten-kopf">
+                <span><i class="pi pi-database"></i> Datenbank</span>
+                <p-tag
+                  [severity]="z.daten.datenbank.status === 'online' ? 'success' : 'danger'"
+                  [value]="z.daten.datenbank.status"
+                />
+              </div>
+            </ng-template>
+
+            <dl class="werte">
+              <dt>Antwortzeit</dt>
+              <dd>{{ z.daten.datenbank.antwortzeitMs }} ms</dd>
+
+              <dt>Benutzer</dt>
+              <dd>{{ z.daten.datenbank.benutzer ?? '—' }}</dd>
+
+              <dt>Aktive Sitzungen</dt>
+              <dd>{{ z.daten.datenbank.aktiveSitzungen ?? '—' }}</dd>
+            </dl>
+          </p-card>
+        </div>
+
+        <p class="stand">
+          Stand: {{ z.daten.zeitpunkt | date: 'dd.MM.yyyy HH:mm:ss' }}
+        </p>
+      }
+    }
+  }
+}

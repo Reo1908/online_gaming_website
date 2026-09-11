@@ -1,32 +1,16 @@
 <section class="hero">
   <h1>Friend Games</h1>
-  <p>Spieleabend für dich und deine Freunde.</p>
-</section>
+  <p class="lead">Spieleabend für dich und deine Freunde.</p>
 
-<section class="status" [attr.data-state]="probe().state">
-  <h2>Systemstatus</h2>
-
-  @switch (probe().state) {
-    @case ('checking') {
-      <p class="line"><span class="dot checking"></span> Backend: wird geprüft …</p>
-    }
-    @case ('online') {
-      <p class="line"><span class="dot online"></span> Backend: online</p>
-      <p class="line"><span class="dot online"></span> Datenbank: verbunden</p>
-    }
-    @case ('offline') {
-      <p class="line"><span class="dot offline"></span> Backend: nicht erreichbar</p>
-      <p class="hint">
-        Läuft der API-Server? <code>npm run dev</code> in <code>apps/api</code> starten.
-      </p>
-    }
+  @if (auth.user(); as user) {
+    <p class="gruss">Schön, dass du da bist, {{ user.displayName }}.</p>
+    <p-button label="Zum Profil" icon="pi pi-user" routerLink="/profile" />
+  } @else {
+    <p-button label="Anmelden" icon="pi pi-sign-in" routerLink="/login" />
   }
-
-  <button type="button" class="recheck" (click)="check()">Erneut prüfen</button>
 </section>
 
-@if (!auth.isLoggedIn()) {
-  <p class="cta">
-    <a routerLink="/login">Anmelden</a>, um dein Profil zu sehen.
-  </p>
-}
+<section class="bald">
+  <h2>Demnächst</h2>
+  <p>Hier entstehen die Spiele. Noch ist es ruhig.</p>
+</section>

@@ -26,6 +26,23 @@ export interface HealthStatus {
   database: 'up' | 'down';
 }
 
+/** Antwort von /api/admin/status -- nur fuer Administratoren. */
+export interface SystemStatus {
+  api: {
+    status: 'online';
+    laufzeitSekunden: number;
+    umgebung: string;
+    nodeVersion: string;
+  };
+  datenbank: {
+    status: 'online' | 'offline';
+    antwortzeitMs: number;
+    benutzer: number | null;
+    aktiveSitzungen: number | null;
+  };
+  zeitpunkt: string;
+}
+
 /**
  * Alle Felder optional -- gesendet wird nur, was der Administrator
  * tatsaechlich geaendert hat. Ein weggelassenes `password` bedeutet

@@ -6,6 +6,7 @@ import type {
   CreateUserInput,
   HealthStatus,
   SessionUser,
+  SystemStatus,
   UpdateUserInput,
 } from './models';
 
@@ -43,6 +44,10 @@ export class ApiService {
       currentPassword,
       newPassword,
     });
+  }
+
+  systemStatus(): Observable<SystemStatus> {
+    return this.http.get<SystemStatus>('/api/admin/status');
   }
 
   listUsers(): Observable<AdminUser[]> {
