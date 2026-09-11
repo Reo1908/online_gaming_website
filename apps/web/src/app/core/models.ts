@@ -55,3 +55,18 @@ export interface UpdateUserInput {
   isActive?: boolean;
   password?: string;
 }
+
+/** Ein Platz in der Rangliste, wie ihn /api/leaderboard liefert. */
+export interface LeaderboardEntry {
+  rank: number;
+  userId: string;
+  username: string;
+  displayName: string;
+  matchesPlayed: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  /** Anteil von 0 bis 1. */
+  winRate: number;
+  updatedAt: string | null;
+}

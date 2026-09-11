@@ -30,6 +30,23 @@ function suchform(text: string): string {
     .replace(/[̀-ͯ]/g, '');
 }
 
+/**
+ * Erzeugt ein Startpasswort aus dem Zufallsgenerator des Browsers.
+ * Math.random() waere hier ungeeignet: es ist vorhersagbar und nicht fuer
+ * Geheimnisse gedacht.
+ *
+ * Aus dem Zeichensatz sind 0/O/1/l/I bewusst verbannt -- das Passwort wird
+ * oft vorgelesen oder abgetippt, und dabei sind genau die verwechselbar.
+ */
+function passwortErzeugen(laenge = 15): string {
+  const zeichen = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+  const werte = crypto.getRandomValues(new Uint32Array(laenge));
+
+  // Rest-Auswahl verzerrt die Verteilung minimal; bei dieser Laenge und
+  // Zeichenzahl ist der Effekt ohne praktische Bedeutung.
+  return Array.from(werte, (w) => zeichen[w % zeichen.length]).join('');
+}
+
 @Component({
   selector: 'app-admin',
   imports: [
@@ -64,6 +81,10 @@ export class Admin {
   protected readonly roles: Role[] = ['PLAYER', 'ADMIN'];
 
   protected readonly suche = signal('');
+
+  /** Zuletzt erzeugtes Passwort, damit es zum Weitergeben sichtbar bleibt. */
+  protected readonly erzeugtesPasswort = signal<string | null>(null);
+  protected readonly passwortKopiert = signal(false);
 
   /**
    * Gefiltert wird im Browser, nicht auf dem Server: die Liste ist ohnehin
@@ -149,10 +170,33 @@ export class Admin {
       this.users.update((list) => [...list, user]);
       this.notice.set(`Benutzer „${user.username}“ wurde angelegt.`);
       this.createForm.reset({ role: 'PLAYER' });
+      this.erzeugtesPasswort.set(null);
     } catch (err) {
       this.error.set(this.messageFor(err, 'Benutzer konnte nicht angelegt werden.'));
     } finally {
       this.busy.set(false);
+    }
+  }
+
+  protected neuesPasswort(): void {
+    const passwort = passwortErzeugen();
+    this.createForm.controls.password.setValue(passwort);
+    this.createForm.controls.password.markAsTouched();
+    this.erzeugtesPasswort.set(passwort);
+    this.passwortKopiert.set(false);
+  }
+
+  protected async passwortKopieren(): Promise<void> {
+    const passwort = this.erzeugtesPasswort();
+    if (!passwort) return;
+
+    try {
+      await navigator.clipboard.writeText(passwort);
+      this.passwortKopiert.set(true);
+      setTimeout(() => this.passwortKopiert.set(false), 2000);
+    } catch {
+      // Zwischenablage kann gesperrt sein; das Passwort steht sichtbar da
+      // und laesst sich von Hand markieren.
     }
   }
 

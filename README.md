@@ -145,7 +145,7 @@ apps/
   web/          Angular 21 + PrimeNG
     src/app/
       core/     Services, Guards, Interceptor, Typen
-      pages/    home, login, profile, admin, status
+      pages/    home, login, leaderboard, profile, admin, status
 ```
 
 ### Datenmodell
@@ -180,6 +180,7 @@ Noch nicht angelegt: `GameStat` (Bilanz je Spiel) und `AuditLog`.
 | POST | `/api/auth/logout` | offen |
 | GET | `/api/auth/me` | angemeldet |
 | GET | `/api/auth/session` | offen |
+| GET | `/api/leaderboard` | angemeldet |
 | POST | `/api/auth/change-password` | angemeldet |
 | GET | `/api/admin/status` | Administrator |
 | GET | `/api/admin/users` | Administrator |

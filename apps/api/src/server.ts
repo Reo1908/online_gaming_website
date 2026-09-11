@@ -6,6 +6,7 @@ import { env, isProduction } from './lib/env.js';
 import { prisma } from './lib/prisma.js';
 import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './routes/auth.js';
+import { leaderboardRoutes } from './routes/leaderboard.js';
 import { adminRoutes } from './routes/admin.js';
 
 const app = Fastify({
@@ -31,6 +32,7 @@ async function build() {
 
   await app.register(healthRoutes);
   await app.register(authRoutes);
+  await app.register(leaderboardRoutes);
   await app.register(adminRoutes);
 
   app.setErrorHandler((error: FastifyError, request, reply) => {

@@ -26,14 +26,41 @@
 
       <div class="field">
         <label for="password">Startpasswort</label>
-        <input
-          pInputText
-          id="password"
-          type="password"
-          formControlName="password"
-          autocomplete="new-password"
-        />
-        <small>Mindestens 12 Zeichen</small>
+        <div class="passwort-zeile">
+          <input
+            pInputText
+            id="password"
+            type="text"
+            formControlName="password"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <p-button
+            icon="pi pi-refresh"
+            severity="secondary"
+            [outlined]="true"
+            ariaLabel="Passwort erzeugen"
+            pTooltip="15-stelliges Passwort erzeugen"
+            (onClick)="neuesPasswort()"
+          />
+        </div>
+        @if (erzeugtesPasswort(); as passwort) {
+          <div class="erzeugt">
+            <code>{{ passwort }}</code>
+            <button
+              type="button"
+              class="kopieren"
+              (click)="passwortKopieren()"
+              aria-label="Passwort kopieren"
+            >
+              <i class="pi" [class.pi-copy]="!passwortKopiert()" [class.pi-check]="passwortKopiert()"></i>
+              {{ passwortKopiert() ? 'Kopiert' : 'Kopieren' }}
+            </button>
+          </div>
+          <small class="warn">Jetzt notieren — nach dem Anlegen ist es nicht mehr einsehbar.</small>
+        } @else {
+          <small>Mindestens 12 Zeichen</small>
+        }
       </div>
 
       <div class="field">

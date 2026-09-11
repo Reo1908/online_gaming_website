@@ -5,6 +5,7 @@ import type {
   AdminUser,
   CreateUserInput,
   HealthStatus,
+  LeaderboardEntry,
   SessionUser,
   SystemStatus,
   UpdateUserInput,
@@ -21,6 +22,10 @@ export class ApiService {
 
   health(): Observable<HealthStatus> {
     return this.http.get<HealthStatus>('/api/health');
+  }
+
+  leaderboard(): Observable<LeaderboardEntry[]> {
+    return this.http.get<LeaderboardEntry[]>('/api/leaderboard');
   }
 
   session(): Observable<{ user: SessionUser | null }> {

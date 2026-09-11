@@ -17,6 +17,12 @@ export const routes: Routes = [
     title: 'Anmelden',
   },
   {
+    path: 'leaderboard',
+    canActivate: [authGuard],
+    loadComponent: () => import('./pages/leaderboard/leaderboard').then((m) => m.Leaderboard),
+    title: 'Rangliste',
+  },
+  {
     path: 'profile',
     canActivate: [authGuard],
     loadComponent: () => import('./pages/profile/profile').then((m) => m.Profile),

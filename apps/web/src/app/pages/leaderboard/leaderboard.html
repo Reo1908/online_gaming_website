@@ -1,0 +1,71 @@
+<div class="kopf">
+  <div>
+    <h1>Rangliste</h1>
+    <p class="unter">Bilanz über alle Spiele hinweg.</p>
+  </div>
+
+  <p-button
+    label="Aktualisieren"
+    icon="pi pi-refresh"
+    severity="secondary"
+    [outlined]="true"
+    size="small"
+    [loading]="laedt()"
+    (onClick)="laden()"
+  />
+</div>
+
+@if (fehler(); as meldung) {
+  <p class="muted">{{ meldung }}</p>
+} @else if (laedt()) {
+  <p class="muted">Wird geladen …</p>
+} @else {
+  @if (nochNichtsGespielt()) {
+    <p class="hinweis">
+      <i class="pi pi-info-circle"></i>
+      Es wurde noch keine Partie gespielt. Sobald die ersten Spiele laufen, füllt
+      sich die Tabelle von selbst.
+    </p>
+  }
+
+  <p-table [value]="eintraege()" styleClass="p-datatable-sm">
+    <ng-template #header>
+      <tr>
+        <th class="platz">#</th>
+        <th>Spieler</th>
+        <th class="zahl">Partien</th>
+        <th class="zahl">S</th>
+        <th class="zahl">N</th>
+        <th class="zahl">U</th>
+        <th class="zahl">Quote</th>
+      </tr>
+    </ng-template>
+
+    <ng-template #body let-e>
+      <tr [class.selbst]="binIch(e)">
+        <td class="platz">
+          <span class="rang" [class.podest]="e.rank <= 3 && e.matchesPlayed > 0">{{ e.rank }}</span>
+        </td>
+        <td>
+          {{ e.displayName }}
+          @if (binIch(e)) {
+            <span class="du">du</span>
+          }
+        </td>
+        <td class="zahl">{{ e.matchesPlayed }}</td>
+        <td class="zahl">{{ e.wins }}</td>
+        <td class="zahl">{{ e.losses }}</td>
+        <td class="zahl">{{ e.draws }}</td>
+        <td class="zahl">
+          @if (e.matchesPlayed > 0) {
+            {{ e.winRate * 100 | number: '1.0-0' }} %
+          } @else {
+            <span class="muted">—</span>
+          }
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
+
+  <p class="legende">S = Siege, N = Niederlagen, U = Unentschieden</p>
+}
