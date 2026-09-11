@@ -13,6 +13,23 @@ import { ApiService } from '../../core/api.service';
 import { AuthService } from '../../core/auth.service';
 import type { AdminUser, Role, UpdateUserInput } from '../../core/models';
 
+/**
+ * Vereinheitlicht Text fuer die Suche: Kleinschreibung, Umlaute ausgeschrieben,
+ * uebrige Akzente entfernt. Damit findet "bjoern" auch "Björn" und umgekehrt --
+ * ein reiner Kleinbuchstaben-Vergleich taete das nicht.
+ */
+function suchform(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/ä/g, 'ae')
+    .replace(/ö/g, 'oe')
+    .replace(/ü/g, 'ue')
+    .replace(/ß/g, 'ss')
+    // Zerlegt Zeichen wie "é" in "e" + Akzent, danach faellt der Akzent weg.
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '');
+}
+
 @Component({
   selector: 'app-admin',
   imports: [
@@ -45,6 +62,25 @@ export class Admin {
   protected readonly dialogError = signal<string | null>(null);
 
   protected readonly roles: Role[] = ['PLAYER', 'ADMIN'];
+
+  protected readonly suche = signal('');
+
+  /**
+   * Gefiltert wird im Browser, nicht auf dem Server: die Liste ist ohnehin
+   * schon vollstaendig geladen, so reagiert die Suche ohne Verzoegerung.
+   * Bei sehr vielen Benutzern waere eine Abfrage mit Suchbegriff besser.
+   */
+  protected readonly gefiltert = computed(() => {
+    const begriff = suchform(this.suche().trim());
+    if (!begriff) return this.users();
+
+    return this.users().filter(
+      (u) =>
+        suchform(u.username).includes(begriff) ||
+        suchform(u.displayName).includes(begriff) ||
+        u.id.toLowerCase().includes(begriff),
+    );
+  });
 
   /** Anzahl der Admins, die das System handlungsfaehig halten. */
   private readonly aktiveAdmins = computed(

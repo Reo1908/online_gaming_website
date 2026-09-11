@@ -57,14 +57,42 @@
 </section>
 
 <section class="panel">
-  <h2>Benutzer ({{ users().length }})</h2>
+  <div class="listen-kopf">
+    <h2>
+      Benutzer
+      @if (suche()) {
+        ({{ gefiltert().length }} von {{ users().length }})
+      } @else {
+        ({{ users().length }})
+      }
+    </h2>
+
+    <div class="suche">
+      <i class="pi pi-search" aria-hidden="true"></i>
+      <input
+        pInputText
+        type="search"
+        [value]="suche()"
+        (input)="suche.set($any($event.target).value)"
+        placeholder="Benutzername, Anzeigename oder ID"
+        aria-label="Benutzer suchen"
+      />
+      @if (suche()) {
+        <button type="button" class="leeren" (click)="suche.set('')" aria-label="Suche leeren">
+          <i class="pi pi-times"></i>
+        </button>
+      }
+    </div>
+  </div>
 
   @if (loading()) {
     <p class="muted">Wird geladen …</p>
   } @else if (users().length === 0) {
     <p class="muted">Noch keine Benutzer vorhanden.</p>
+  } @else if (gefiltert().length === 0) {
+    <p class="muted">Kein Benutzer passt zu „{{ suche() }}“.</p>
   } @else {
-    <p-table [value]="users()" styleClass="p-datatable-sm">
+    <p-table [value]="gefiltert()" styleClass="p-datatable-sm">
       <ng-template #header>
         <tr>
           <th>Benutzername</th>
