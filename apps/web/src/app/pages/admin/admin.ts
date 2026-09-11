@@ -8,7 +8,9 @@ import { DialogModule } from 'primeng/dialog';
 import { InputTextModule } from 'primeng/inputtext';
 import { MessageModule } from 'primeng/message';
 import { TableModule } from 'primeng/table';
+import { TabsModule } from 'primeng/tabs';
 import { TooltipModule } from 'primeng/tooltip';
+import { AdminTools } from './admin-tools';
 import { ApiService } from '../../core/api.service';
 import { AuthService } from '../../core/auth.service';
 import type { AdminUser, Role, UpdateUserInput } from '../../core/models';
@@ -57,7 +59,9 @@ function passwortErzeugen(laenge = 15): string {
     InputTextModule,
     MessageModule,
     TableModule,
+    TabsModule,
     TooltipModule,
+    AdminTools,
   ],
   templateUrl: './admin.html',
   styleUrl: './admin.scss',

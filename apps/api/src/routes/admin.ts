@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { hashPassword } from '../lib/password.js';
 import { requireAdmin } from '../lib/guards.js';
+import { protokolliere, protokolliereMehrere } from '../lib/audit.js';
 
 /**
  * Feldauswahl fuer jede Antwort dieser Datei.
@@ -150,14 +151,30 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     const { username, displayName, password, role } = parsed.data;
 
     try {
-      const user = await prisma.user.create({
-        data: {
-          username,
-          displayName,
-          passwordHash: await hashPassword(password),
-          role,
-        },
-        select: PUBLIC_USER_FIELDS,
+      const actor = request.user!;
+      const user = await prisma.$transaction(async (tx) => {
+        const angelegt = await tx.user.create({
+          data: {
+            username,
+            displayName,
+            passwordHash: await hashPassword(password),
+            role,
+          },
+          select: PUBLIC_USER_FIELDS,
+        });
+
+        await protokolliere(
+          {
+            action: 'USER_CREATED',
+            actor: { id: actor.id, username: actor.username },
+            target: { id: angelegt.id, username: angelegt.username },
+            field: 'role',
+            newValue: angelegt.role,
+          },
+          tx,
+        );
+
+        return angelegt;
       });
 
       return reply.code(201).send(user);
@@ -214,6 +231,11 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
           await assertNotLastAdmin(tx, id, 'Der letzte aktive Administrator kann nicht herabgestuft werden');
         }
 
+        const vorher = await tx.user.findUniqueOrThrow({
+          where: { id },
+          select: PUBLIC_USER_FIELDS,
+        });
+
         const updated = await tx.user.update({
           where: { id },
           data: {
@@ -222,6 +244,37 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
           },
           select: PUBLIC_USER_FIELDS,
         });
+
+        // Je geaendertem Feld ein Eintrag, damit sich der Verlauf einer
+        // einzelnen Eigenschaft spaeter herausfiltern laesst.
+        const geaendert = (['username', 'displayName', 'role', 'isActive'] as const).filter(
+          (feld) => vorher[feld] !== updated[feld],
+        );
+
+        await protokolliereMehrere(
+          geaendert.map((feld) => ({
+            action: 'USER_UPDATED' as const,
+            actor: { id: actor.id, username: actor.username },
+            target: { id: updated.id, username: updated.username },
+            field: feld,
+            oldValue: vorher[feld],
+            newValue: updated[feld],
+          })),
+          tx,
+        );
+
+        if (password) {
+          // Das Passwort selbst wird niemals protokolliert -- nur, dass es
+          // zurueckgesetzt wurde und von wem.
+          await protokolliere(
+            {
+              action: 'USER_PASSWORD_RESET',
+              actor: { id: actor.id, username: actor.username },
+              target: { id: updated.id, username: updated.username },
+            },
+            tx,
+          );
+        }
 
         // Neues Passwort oder Deaktivierung muss laufende Sitzungen beenden,
         // sonst bleibt der Betroffene mit dem alten Cookie weiter angemeldet.
@@ -258,12 +311,27 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
 
     try {
       await prisma.$transaction(async (tx) => {
-        const target = await tx.user.findUnique({ where: { id }, select: { id: true, role: true } });
-        if (!target) throw new AdminActionError(404, 'Benutzer nicht gefunden');
+        const ziel = await tx.user.findUnique({
+          where: { id },
+          select: { id: true, role: true, username: true },
+        });
+        if (!ziel) throw new AdminActionError(404, 'Benutzer nicht gefunden');
 
-        if (target.role === 'ADMIN') {
+        if (ziel.role === 'ADMIN') {
           await assertNotLastAdmin(tx, id, 'Der letzte aktive Administrator kann nicht gelöscht werden');
         }
+
+        // Vor dem Loeschen schreiben: danach gibt es den Benutzer nicht mehr.
+        // Der Verweis wird dabei auf leer gesetzt, der Name bleibt als
+        // Momentaufnahme im Eintrag stehen.
+        await protokolliere(
+          {
+            action: 'USER_DELETED',
+            actor: { id: request.user!.id, username: request.user!.username },
+            target: { id: ziel.id, username: ziel.username },
+          },
+          tx,
+        );
 
         // Sessions verschwinden ueber onDelete: Cascade automatisch mit.
         await tx.user.delete({ where: { id } });

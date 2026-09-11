@@ -70,3 +70,46 @@ export interface LeaderboardEntry {
   winRate: number;
   updatedAt: string | null;
 }
+
+export type AuditAction =
+  | 'USER_CREATED'
+  | 'USER_UPDATED'
+  | 'USER_DELETED'
+  | 'USER_PASSWORD_RESET'
+  | 'STAT_ADJUSTED';
+
+/** Ein Protokolleintrag im Verlauf eines Kontos. */
+export interface AuditEntry {
+  id: string;
+  action: AuditAction;
+  /** Leer, wenn die Aenderung vom System kam. */
+  actorUsername: string | null;
+  field: string | null;
+  oldValue: string | null;
+  newValue: string | null;
+  reason: string | null;
+  createdAt: string;
+}
+
+export interface OverallStats {
+  matchesPlayed: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  updatedAt: string | null;
+}
+
+/** Antwort von /api/admin/users/:id/support. */
+export interface SupportView {
+  user: AdminUser;
+  stats: OverallStats;
+  history: AuditEntry[];
+}
+
+export interface StatAdjustment {
+  matchesPlayed?: number;
+  wins?: number;
+  losses?: number;
+  draws?: number;
+  reason: string;
+}

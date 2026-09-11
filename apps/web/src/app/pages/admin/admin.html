@@ -1,5 +1,14 @@
 <h1>Administration</h1>
 
+<p-tabs value="benutzer">
+  <p-tablist>
+    <p-tab value="benutzer"><i class="pi pi-users"></i> Benutzer</p-tab>
+    <p-tab value="werkzeuge"><i class="pi pi-wrench"></i> Werkzeuge</p-tab>
+  </p-tablist>
+
+  <p-tabpanels>
+    <p-tabpanel value="benutzer">
+
 @if (error(); as message) {
   <p-message severity="error" [text]="message" styleClass="full" />
 }
@@ -171,6 +180,16 @@
     </p-table>
   }
 </section>
+
+    </p-tabpanel>
+
+    <p-tabpanel value="werkzeuge">
+      <!-- Die geladene Benutzerliste wird weitergereicht, damit die
+           Auswahl sie nicht ein zweites Mal holen muss. -->
+      <app-admin-tools [users]="users()" />
+    </p-tabpanel>
+  </p-tabpanels>
+</p-tabs>
 
 <!-- Bearbeiten -->
 <p-dialog

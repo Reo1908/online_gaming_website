@@ -4,6 +4,9 @@ import type { Observable } from 'rxjs';
 import type {
   AdminUser,
   CreateUserInput,
+  OverallStats,
+  StatAdjustment,
+  SupportView,
   HealthStatus,
   LeaderboardEntry,
   SessionUser,
@@ -69,5 +72,20 @@ export class ApiService {
 
   deleteUser(id: string): Observable<void> {
     return this.http.delete<void>(`/api/admin/users/${id}`);
+  }
+
+  /** Konto, Bilanz und Aenderungsverlauf in einem Aufruf. */
+  supportView(id: string): Observable<SupportView> {
+    return this.http.get<SupportView>(`/api/admin/users/${id}/support`);
+  }
+
+  adjustStats(
+    id: string,
+    adjustment: StatAdjustment,
+  ): Observable<{ stats: OverallStats; geaenderteFelder: string[] }> {
+    return this.http.patch<{ stats: OverallStats; geaenderteFelder: string[] }>(
+      `/api/admin/users/${id}/stats`,
+      adjustment,
+    );
   }
 }

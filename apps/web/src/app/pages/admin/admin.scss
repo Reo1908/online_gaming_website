@@ -270,3 +270,17 @@ tr.inaktiv td {
     font-size: 0.75rem;
   }
 }
+
+/* Der Tab-Inhalt bringt eigene Polsterung mit; die Karten darin haben
+   bereits Abstand, sonst entstuende doppelter Rand. */
+:host ::ng-deep .p-tabpanels {
+  padding-inline: 0;
+  padding-bottom: 0;
+  background: transparent;
+}
+
+:host ::ng-deep .p-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}

@@ -1,0 +1,172 @@
+<section class="panel">
+  <h2>Konto auswählen</h2>
+
+  <p-select
+    [options]="auswahl()"
+    optionLabel="label"
+    optionValue="value"
+    [ngModel]="gewaehlt()"
+    (ngModelChange)="auswaehlen($event)"
+    [ngModelOptions]="{ standalone: true }"
+    [filter]="true"
+    filterBy="label"
+    [showClear]="true"
+    placeholder="Benutzer suchen …"
+    styleClass="auswahl"
+    emptyMessage="Keine Benutzer"
+    emptyFilterMessage="Kein Treffer"
+  />
+</section>
+
+@if (fehler(); as meldung) {
+  <p-message severity="error" [text]="meldung" styleClass="voll" />
+}
+@if (hinweis(); as meldung) {
+  <p-message severity="success" [text]="meldung" styleClass="voll" />
+}
+
+@if (laedt()) {
+  <p class="muted">Wird geladen …</p>
+} @else if (ansicht(); as a) {
+  <section class="panel">
+    <div class="konto-kopf">
+      <div>
+        <h3>{{ a.user.displayName }}</h3>
+        <p class="handle">{{ a.user.username }}</p>
+      </div>
+      <div class="marken">
+        <p-tag
+          [severity]="a.user.role === 'ADMIN' ? 'success' : 'secondary'"
+          [value]="a.user.role === 'ADMIN' ? 'Administrator' : 'Spieler'"
+        />
+        @if (!a.user.isActive) {
+          <p-tag severity="danger" value="Deaktiviert" />
+        }
+      </div>
+    </div>
+
+    <dl class="kennzahlen">
+      @for (z of zaehler; track z.key) {
+        <div class="kennzahl">
+          <dt>{{ z.label }}</dt>
+          <dd>{{ $any(a.stats)[z.key] }}</dd>
+        </div>
+      }
+    </dl>
+
+    <p class="stand">
+      @if (a.stats.updatedAt) {
+        Zuletzt geändert: {{ a.stats.updatedAt | date: 'dd.MM.yyyy HH:mm' }}
+      } @else {
+        Noch keine Bilanz vorhanden — die Zahlen stehen auf null.
+      }
+    </p>
+  </section>
+
+  <section class="panel">
+    <h2>Bilanz korrigieren</h2>
+
+    <form [formGroup]="form" (ngSubmit)="speichern()" novalidate>
+      <div class="raster">
+        @for (z of zaehler; track z.key) {
+          <div class="feld">
+            <label [for]="'feld-' + z.key">{{ z.label }}</label>
+            <input
+              pInputText
+              [id]="'feld-' + z.key"
+              type="number"
+              min="0"
+              [formControlName]="z.key"
+            />
+          </div>
+        }
+      </div>
+
+      <div class="feld grund">
+        <label for="reason">Begründung <span class="pflicht">*</span></label>
+        <textarea
+          pTextarea
+          id="reason"
+          formControlName="reason"
+          rows="2"
+          placeholder="Warum wird korrigiert? Steht später im Verlauf."
+        ></textarea>
+        <small>Mindestens 3 Zeichen. Wird dauerhaft mitprotokolliert.</small>
+      </div>
+
+      <p-button
+        type="submit"
+        label="Korrektur speichern"
+        icon="pi pi-save"
+        [loading]="busy()"
+        [disabled]="form.invalid"
+      />
+    </form>
+  </section>
+
+  <section class="panel">
+    <div class="verlauf-kopf">
+      <h2>Verlauf ({{ verlauf().length }})</h2>
+
+      <div class="filter">
+        <button
+          type="button"
+          class="chip"
+          [class.aktiv]="feldFilter() === null"
+          (click)="feldFilter.set(null)"
+        >
+          Alles
+        </button>
+        @for (z of zaehler; track z.key) {
+          <button
+            type="button"
+            class="chip"
+            [class.aktiv]="feldFilter() === z.key"
+            (click)="feldFilter.set(z.key)"
+          >
+            {{ z.label }}
+          </button>
+        }
+      </div>
+    </div>
+
+    @if (verlauf().length === 0) {
+      <p class="muted">
+        @if (feldFilter()) {
+          Für „{{ feldText(feldFilter()) }}“ gibt es noch keine Änderung.
+        } @else {
+          Für dieses Konto wurde noch nichts protokolliert.
+        }
+      </p>
+    } @else {
+      <ol class="eintraege">
+        @for (e of verlauf(); track e.id) {
+          <li>
+            <div class="zeit">{{ e.createdAt | date: 'dd.MM. HH:mm' }}</div>
+            <div class="inhalt">
+              <div class="kopfzeile">
+                <span class="aktion">{{ aktionText(e.action) }}</span>
+                <span class="akteur">durch {{ e.actorUsername ?? 'System' }}</span>
+              </div>
+
+              @if (e.field) {
+                <div class="wertwechsel">
+                  <span class="feldname">{{ feldText(e.field) }}</span>
+                  <span class="alt">{{ e.oldValue ?? '—' }}</span>
+                  <i class="pi pi-arrow-right" aria-hidden="true"></i>
+                  <span class="neu">{{ e.newValue ?? '—' }}</span>
+                </div>
+              }
+
+              @if (e.reason) {
+                <p class="grund">„{{ e.reason }}“</p>
+              }
+            </div>
+          </li>
+        }
+      </ol>
+    }
+  </section>
+} @else {
+  <p class="muted">Wähle oben ein Konto aus, um Bilanz und Verlauf zu sehen.</p>
+}

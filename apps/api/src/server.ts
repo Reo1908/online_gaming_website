@@ -8,6 +8,7 @@ import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './routes/auth.js';
 import { leaderboardRoutes } from './routes/leaderboard.js';
 import { adminRoutes } from './routes/admin.js';
+import { supportRoutes } from './routes/support.js';
 
 const app = Fastify({
   logger: isProduction
@@ -34,6 +35,7 @@ async function build() {
   await app.register(authRoutes);
   await app.register(leaderboardRoutes);
   await app.register(adminRoutes);
+  await app.register(supportRoutes);
 
   app.setErrorHandler((error: FastifyError, request, reply) => {
     request.log.error(error);

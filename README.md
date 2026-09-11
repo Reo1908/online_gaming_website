@@ -158,6 +158,7 @@ apps/
 | `Match` | Eine konkrete Partie: `LOBBY` → `RUNNING` → `FINISHED` / `ABORTED` |
 | `MatchPlayer` | Teilnahme eines Benutzers an einer Partie, mit Ergebnis |
 | `OverallStat` | Bilanz über alle Spiele hinweg, Grundlage der Rangliste |
+| `AuditLog` | Wer hat wann an welchem Konto was geändert — und warum |
 
 Zwei Entscheidungen, die beim Weiterbauen wichtig sind:
 
@@ -169,7 +170,11 @@ Zwei Entscheidungen, die beim Weiterbauen wichtig sind:
   Partie werden die Zähler erhöht, statt für jede Anzeige der Rangliste alle
   Partien neu zusammenzuzählen.
 
-Noch nicht angelegt: `GameStat` (Bilanz je Spiel) und `AuditLog`.
+Noch nicht angelegt: `GameStat` (Bilanz je Spiel).
+
+Im `AuditLog` stehen Benutzername von Auslöser und Betroffenem zusätzlich als
+Momentaufnahme. Die Verweise werden beim Löschen eines Kontos auf leer gesetzt —
+ohne diese Kopien wäre danach nicht mehr erkennbar, um wen es ging.
 
 ### Endpunkte
 
@@ -184,6 +189,8 @@ Noch nicht angelegt: `GameStat` (Bilanz je Spiel) und `AuditLog`.
 | POST | `/api/auth/change-password` | angemeldet |
 | GET | `/api/admin/status` | Administrator |
 | GET | `/api/admin/users` | Administrator |
+| GET | `/api/admin/users/:id/support` | Administrator |
+| PATCH | `/api/admin/users/:id/stats` | Administrator |
 | POST | `/api/admin/users` | Administrator |
 | PATCH | `/api/admin/users/:id` | Administrator |
 | DELETE | `/api/admin/users/:id` | Administrator |

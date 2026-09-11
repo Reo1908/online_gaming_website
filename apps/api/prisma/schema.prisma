@@ -32,6 +32,15 @@ enum MatchResult {
   DRAW
 }
 
+enum AuditAction {
+  USER_CREATED
+  USER_UPDATED
+  USER_DELETED
+  USER_PASSWORD_RESET
+  /// Bilanz von Hand korrigiert -- der Fall, fuer den es die Begruendung gibt.
+  STAT_ADJUSTED
+}
+
 model User {
   id           String    @id @default(uuid())
   username     String    @unique
@@ -45,6 +54,9 @@ model User {
   matchPlayers   MatchPlayer[]
   createdMatches Match[]       @relation("MatchCreator")
   overallStat    OverallStat?
+
+  ausgefuehrteAktionen AuditLog[] @relation("AuditActor")
+  betroffeneAktionen   AuditLog[] @relation("AuditTarget")
 }
 
 /// Serverseitige Session.
@@ -145,4 +157,39 @@ model OverallStat {
 
   /// Sortierreihenfolge der Rangliste.
   @@index([wins])
+}
+
+/// Nachvollziehbarkeit fuer den Support: wer hat wann an welchem Konto was
+/// veraendert -- und warum.
+model AuditLog {
+  id     String      @id @default(uuid())
+  action AuditAction
+
+  /// Wer ausgeloest hat. Leer, wenn es das System war (etwa ein Partieende).
+  actorId String?
+  actor   User?   @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  /// Um wessen Konto es ging.
+  targetId String?
+  target   User?   @relation("AuditTarget", fields: [targetId], references: [id], onDelete: SetNull)
+
+  /// Namen als Momentaufnahme mitgeschrieben. Die Verweise oben werden beim
+  /// Loeschen eines Kontos auf leer gesetzt -- ohne diese Kopien waere danach
+  /// nicht mehr erkennbar, um wen es ueberhaupt ging.
+  actorUsername  String?
+  targetUsername String?
+
+  /// Bei STAT_ADJUSTED das geaenderte Feld samt Werten davor und danach.
+  field    String?
+  oldValue String?
+  newValue String?
+
+  /// Begruendung. Bei Handkorrekturen Pflicht, sonst leer.
+  reason String?
+
+  createdAt DateTime @default(now())
+
+  /// Verlauf eines Kontos, neueste zuerst.
+  @@index([targetId, createdAt])
+  @@index([createdAt])
 }
