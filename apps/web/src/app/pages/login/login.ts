@@ -3,13 +3,22 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ButtonModule } from 'primeng/button';
+import { CardModule } from 'primeng/card';
 import { InputTextModule } from 'primeng/inputtext';
 import { MessageModule } from 'primeng/message';
+import { PasswordModule } from 'primeng/password';
 import { AuthService } from '../../core/auth.service';
 
 @Component({
   selector: 'app-login',
-  imports: [ReactiveFormsModule, ButtonModule, InputTextModule, MessageModule],
+  imports: [
+    ReactiveFormsModule,
+    ButtonModule,
+    CardModule,
+    InputTextModule,
+    MessageModule,
+    PasswordModule,
+  ],
   templateUrl: './login.html',
   styleUrl: './login.scss',
 })
@@ -48,16 +57,27 @@ export class Login {
 
       await this.router.navigateByUrl(safeTarget);
     } catch (err) {
-      this.error.set(
-        err instanceof HttpErrorResponse && err.status === 401
-          ? 'Benutzername oder Passwort falsch.'
-          : err instanceof HttpErrorResponse && err.status === 429
-            ? 'Zu viele Versuche. Bitte kurz warten.'
-            : 'Anmeldung fehlgeschlagen. Ist das Backend erreichbar?',
-      );
+      this.error.set(this.messageFor(err));
       this.form.controls.password.reset();
     } finally {
       this.busy.set(false);
+    }
+  }
+
+  private messageFor(err: unknown): string {
+    if (!(err instanceof HttpErrorResponse)) {
+      return 'Anmeldung fehlgeschlagen. Ist das Backend erreichbar?';
+    }
+
+    switch (err.status) {
+      case 401:
+        return 'Benutzername oder Passwort falsch.';
+      case 429:
+        return 'Zu viele Versuche. Bitte kurz warten.';
+      case 0:
+        return 'Backend nicht erreichbar.';
+      default:
+        return 'Anmeldung fehlgeschlagen.';
     }
   }
 }

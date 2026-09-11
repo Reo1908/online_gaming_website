@@ -1,39 +1,64 @@
+<!-- Liegt hinter dem Inhalt und faerbt die ganze Flaeche, obwohl die
+     Anmeldeseite selbst nur so breit wie die Card ist. -->
+<div class="backdrop" aria-hidden="true"></div>
+
 <div class="wrap">
-  <h1>Anmelden</h1>
+  <p-card styleClass="login-card">
+    <ng-template #header>
+      <div class="card-head">
+        <div class="badge"><i class="pi pi-users"></i></div>
+        <h1>Willkommen zurück</h1>
+        <p>Melde dich an, um mitzuspielen.</p>
+      </div>
+    </ng-template>
 
-  <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
-    @if (error(); as message) {
-      <p-message severity="error" [text]="message" styleClass="full" />
-    }
+    <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      @if (error(); as message) {
+        <p-message severity="error" [text]="message" styleClass="full" />
+      }
 
-    <label for="username">Benutzername</label>
-    <input
-      pInputText
-      id="username"
-      formControlName="username"
-      autocomplete="username"
-      autofocus
-    />
+      <div class="field">
+        <label for="username">Benutzername</label>
+        <input
+          pInputText
+          id="username"
+          formControlName="username"
+          autocomplete="username"
+          [fluid]="true"
+          autofocus
+        />
+      </div>
 
-    <label for="password">Passwort</label>
-    <input
-      pInputText
-      id="password"
-      type="password"
-      formControlName="password"
-      autocomplete="current-password"
-    />
+      <div class="field">
+        <label for="password">Passwort</label>
+        <!-- toggleMask blendet das Auge zum Aufdecken ein; die
+             Staerke-Anzeige waere beim Anmelden dagegen sinnlos. -->
+        <p-password
+          inputId="password"
+          formControlName="password"
+          [feedback]="false"
+          [toggleMask]="true"
+          [fluid]="true"
+          autocomplete="current-password"
+        />
+      </div>
 
-    <p-button
-      type="submit"
-      label="Anmelden"
-      [loading]="busy()"
-      [disabled]="form.invalid"
-      styleClass="submit"
-    />
-  </form>
+      <p-button
+        type="submit"
+        label="Anmelden"
+        icon="pi pi-sign-in"
+        [loading]="busy()"
+        [disabled]="form.invalid"
+        styleClass="submit"
+      />
+    </form>
 
-  <p class="note">
-    Konten werden von einem Administrator angelegt. Es gibt keine Selbstregistrierung.
-  </p>
+    <ng-template #footer>
+      <p class="note">
+        <i class="pi pi-info-circle"></i>
+        Konten werden von einem Administrator angelegt. Eine Selbstregistrierung
+        gibt es nicht.
+      </p>
+    </ng-template>
+  </p-card>
 </div>
