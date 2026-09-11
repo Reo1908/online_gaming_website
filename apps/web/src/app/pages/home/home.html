@@ -1,8 +1,8 @@
 <section class="start">
   <h1>Spielt zusammen.</h1>
   <p class="untertitel">
-    Eine Lobby öffnen, den Code weitergeben, losspielen. Die Spielleitung stellt die Fragen,
-    alle anderen buzzern.
+    Eine Lobby öffnen, den Code weitergeben, losspielen. Buzzern, wer die Antwort zuerst weiß —
+    oder zeichnen und raten lassen.
   </p>
 
   <div class="einstieg">
@@ -47,13 +47,45 @@
   </section>
 }
 
+<!-- Offene Lobbys: der Unterschied zwischen "privat" und "öffentlich". -->
+@if (offene().length > 0) {
+  <section class="offen">
+    <h2>Offene Lobbys</h2>
+
+    <ul class="partien">
+      @for (partie of offene(); track partie.id) {
+        <li>
+          <button type="button" class="partie" (click)="oeffnen(partie)">
+            <span class="partie-code">{{ partie.code }}</span>
+            <span class="partie-text">
+              <strong>{{ partie.name }}</strong>
+              <span class="partie-meta">
+                {{ partie.spiel.name }} · {{ partie.teilnehmer.length }} dabei
+              </span>
+
+              @if (partie.etiketten.length > 0) {
+                <span class="etiketten">
+                  @for (e of partie.etiketten; track e.slug) {
+                    <span class="etikett" [style.--farbe]="e.farbe">{{ e.name }}</span>
+                  }
+                </span>
+              }
+            </span>
+            <i class="pi pi-angle-right" aria-hidden="true"></i>
+          </button>
+        </li>
+      }
+    </ul>
+  </section>
+}
+
 <!-- Lobby erstellen -->
 <p-dialog
   [visible]="anlegenOffen()"
   (visibleChange)="$event || anlegenOffen.set(false)"
   [modal]="true"
   [draggable]="false"
-  [style]="{ width: '32rem' }"
+  [style]="{ width: '34rem' }"
   header="Lobby erstellen"
 >
   <form [formGroup]="anlegenForm" (ngSubmit)="anlegen()" novalidate class="dialog-form">
@@ -90,33 +122,109 @@
       />
     </div>
 
-    @if (gewaehlteArt(); as art) {
+    <!-- Gilt für jede Spielart, deshalb außerhalb der Spieleinstellungen. -->
+    <fieldset class="optionen">
+      <legend>Wer darf rein</legend>
+
+      <label class="schalter">
+        <input
+          type="radio"
+          name="sichtbarkeit"
+          [checked]="!oeffentlich()"
+          (change)="oeffentlich.set(false)"
+        />
+        <span>
+          Privat
+          <small>Nur wer den Code hat, kommt rein</small>
+        </span>
+      </label>
+
+      <label class="schalter">
+        <input
+          type="radio"
+          name="sichtbarkeit"
+          [checked]="oeffentlich()"
+          (change)="oeffentlich.set(true)"
+        />
+        <span>
+          Öffentlich
+          <small>Steht für alle auf der Startseite</small>
+        </span>
+      </label>
+    </fieldset>
+
+    <!-- Die Felder kommen aus der Spielbeschreibung, nicht aus diesem Formular. -->
+    @if (felder().length > 0) {
       <fieldset class="optionen">
         <legend>Einstellungen</legend>
 
-        <div class="feld">
-          <label for="punkte">Punkte pro Treffer</label>
-          <input pInputText id="punkte" type="number" min="1" max="100" formControlName="punkteProTreffer" />
-          <small>So viel vergibt ein Klick auf „+" im Spiel</small>
-        </div>
-
-        <label class="schalter">
-          <input type="checkbox" formControlName="nurEinmalBuzzern" />
-          <span>
-            Nur einmal buzzern je Runde
-            <small>Wer gedrückt hat, ist bis zur nächsten Frage raus</small>
-          </span>
-        </label>
-
-        <label class="schalter">
-          <input type="checkbox" formControlName="antwortenOeffentlich" />
-          <span>
-            Antworten für alle sichtbar
-            <small>Ohne Haken sieht nur die Spielleitung, was getippt wird</small>
-          </span>
-        </label>
+        @for (feld of felder(); track feld.key) {
+          @if (feld.typ === 'zahl') {
+            <div class="feld">
+              <label [attr.for]="'feld-' + feld.key">{{ feld.label }}</label>
+              <input
+                pInputText
+                [id]="'feld-' + feld.key"
+                type="number"
+                [min]="feld.min ?? 0"
+                [max]="feld.max ?? 9999"
+                [value]="wert(feld.key)"
+                (input)="wertSetzen(feld, $any($event.target).value)"
+              />
+              @if (feld.hilfe) {
+                <small>{{ feld.hilfe }}</small>
+              }
+            </div>
+          } @else {
+            <label class="schalter">
+              <input
+                type="checkbox"
+                [checked]="wert(feld.key) === true"
+                (change)="wertSetzen(feld, $any($event.target).checked)"
+              />
+              <span>
+                {{ feld.label }}
+                @if (feld.hilfe) {
+                  <small>{{ feld.hilfe }}</small>
+                }
+              </span>
+            </label>
+          }
+        }
       </fieldset>
     }
+
+    <fieldset class="optionen">
+      <legend>Themen</legend>
+
+      @if (themen().length > 0) {
+        <p class="hilfe">
+          @if (gewaehlteArt()?.brauchtThemen) {
+            Bestimmt, aus welchen Wörtern gezogen wird. Ohne Auswahl zählen alle.
+          } @else {
+            Sagt anderen, worum es in der Runde geht. Lässt sich später ändern.
+          }
+        </p>
+
+        <div class="etiketten waehlbar">
+          @for (t of themen(); track t.slug) {
+            <button
+              type="button"
+              class="etikett"
+              [class.aktiv]="themaGewaehlt(t.slug)"
+              [style.--farbe]="t.farbe"
+              [attr.aria-pressed]="themaGewaehlt(t.slug)"
+              (click)="themaUmschalten(t.slug)"
+            >
+              {{ t.name }}
+              <span class="anzahl">{{ t.woerter }}</span>
+            </button>
+          }
+        </div>
+      } @else {
+        <p class="hilfe">Es gibt noch keine Themen. Ein Administrator legt sie an.</p>
+      }
+    </fieldset>
 
     <div class="dialog-aktionen">
       <p-button

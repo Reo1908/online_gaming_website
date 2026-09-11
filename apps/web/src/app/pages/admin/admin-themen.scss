@@ -1,0 +1,169 @@
+.panel {
+  border: 1px solid var(--p-surface-200);
+  border-radius: 10px;
+  padding: 1.5rem;
+  margin-bottom: 1.25rem;
+
+  h2 {
+    font-size: 0.8125rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--p-text-muted-color);
+    margin: 0 0 0.375rem;
+  }
+}
+
+.panel-kopf {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+
+  p {
+    max-width: 42rem;
+  }
+}
+
+.themenliste {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.thema {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--p-surface-200);
+  border-radius: 10px;
+  background: var(--p-surface-0);
+
+  /* Ein abgeschaltetes Thema bleibt lesbar, tritt aber zurueck -- es ist
+     nicht geloescht, nur gerade nicht im Spiel. */
+  &.aus {
+    opacity: 0.55;
+  }
+}
+
+.farbtupfer {
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 50%;
+  flex: none;
+}
+
+.thema-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  margin-right: auto;
+  min-width: 0;
+}
+
+.thema-meta {
+  font-size: 0.8125rem;
+  color: var(--p-text-muted-color);
+}
+
+.thema-knoepfe {
+  display: flex;
+  gap: 0.125rem;
+  flex-wrap: wrap;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.muted {
+  color: var(--p-text-muted-color);
+  margin: 0;
+}
+
+.small {
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+/* ---------- Dialog ---------- */
+
+.dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+
+  label {
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+
+  small {
+    font-size: 0.75rem;
+    color: var(--p-text-muted-color);
+  }
+
+  input,
+  textarea {
+    width: 100%;
+  }
+
+  textarea {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.875rem;
+    resize: vertical;
+  }
+}
+
+.palette {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.farbe {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  box-shadow: 0 0 0 1px var(--p-surface-300);
+  cursor: pointer;
+  padding: 0;
+
+  &.aktiv {
+    border-color: var(--p-surface-0);
+    box-shadow: 0 0 0 2px var(--p-text-color);
+  }
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+:host ::ng-deep .full {
+  width: 100%;
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 640px) {
+  .thema {
+    flex-wrap: wrap;
+  }
+
+  .thema-text {
+    min-width: 60%;
+  }
+}

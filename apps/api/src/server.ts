@@ -6,13 +6,15 @@ import { env, isProduction } from './lib/env.js';
 import { prisma } from './lib/prisma.js';
 import { purgeExpiredSessions } from './lib/session.js';
 import { realtimeStarten } from './lib/realtime.js';
-import { spielartenSicherstellen } from './lib/spiele.js';
+import { spielartenSicherstellen } from './games/index.js';
+import { etikettenSicherstellen } from './lib/etiketten.js';
 import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './routes/auth.js';
 import { leaderboardRoutes } from './routes/leaderboard.js';
 import { adminRoutes } from './routes/admin.js';
 import { supportRoutes } from './routes/support.js';
 import { matchRoutes } from './routes/matches.js';
+import { tagRoutes } from './routes/tags.js';
 
 const app = Fastify({
   // Siehe TRUST_PROXY in lib/env.ts: entscheidet, welche Adresse als die des
@@ -43,6 +45,7 @@ async function build() {
   await app.register(leaderboardRoutes);
   await app.register(matchRoutes);
   await app.register(adminRoutes);
+  await app.register(tagRoutes);
   await app.register(supportRoutes);
 
   app.setErrorHandler((error: FastifyError, request, reply) => {
@@ -80,6 +83,10 @@ async function start() {
   // Die Spielarten stehen im Quelltext; die Tabelle wird daraus abgeglichen,
   // damit auf einem frischen Server niemand Spiele von Hand anlegen muss.
   await spielartenSicherstellen();
+
+  // Die Themengebiete dagegen gehoeren der Verwaltung. Angelegt werden sie
+  // nur einmal, auf einem noch leeren Server -- siehe lib/etiketten.ts.
+  await etikettenSicherstellen();
 
   // Haengt sich an denselben HTTP-Server -- danach darf nichts mehr an den
   // Routen geaendert werden, deshalb erst nach build().

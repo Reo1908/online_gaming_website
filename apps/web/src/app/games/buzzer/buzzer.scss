@@ -1,0 +1,235 @@
+@use '../gemeinsam' as *;
+
+/* Zwei Farben, die die Aura-Tokens nicht hergeben: die dunkle Platte und das
+   Rot des Buzzers. Beide kommen aus dem Gegenstand -- eine Anzeigetafel ist
+   dunkel, ein Buzzer ist rot. */
+:host {
+  --platte: #151a23;
+  --platte-text: #f4f6fb;
+  --buzz: #d31f3c;
+  --buzz-dunkel: #a3162e;
+
+  display: block;
+}
+
+/* ---------- Leitpult ---------- */
+
+.leitpult {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--p-surface-200);
+  border-radius: 10px;
+  background: var(--p-surface-0);
+  margin-bottom: 1rem;
+}
+
+.runde {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+.runde-zahl {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.runde-status {
+  font-size: 0.8125rem;
+  color: var(--p-text-muted-color);
+
+  &.live {
+    color: var(--buzz);
+    font-weight: 600;
+  }
+}
+
+.runde-knoepfe {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.spielerliste {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.spielerzeile {
+  border: 1px solid var(--p-surface-200);
+  border-left: 3px solid transparent;
+  border-radius: 8px;
+  padding: 0.75rem 0.875rem;
+
+  /* Wer zuerst gedrueckt hat, ist die einzige Information, die im Spiel
+     wirklich zaehlt -- deshalb bekommt nur diese Zeile Farbe. */
+  &.gebuzzert {
+    border-left-color: var(--buzz);
+    background: color-mix(in srgb, var(--buzz) 4%, var(--p-surface-0));
+  }
+}
+
+.spieler-kopf {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+
+  .name {
+    margin-right: auto;
+    font-weight: 500;
+  }
+}
+
+.punkt-knoepfe {
+  display: flex;
+  gap: 0.25rem;
+
+  button {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 6px;
+    border: 1px solid var(--p-surface-300);
+    background: var(--p-surface-0);
+    font-size: 1.125rem;
+    line-height: 1;
+    cursor: pointer;
+    color: var(--p-text-color);
+
+    &:hover {
+      border-color: var(--p-primary-color);
+      color: var(--p-primary-color);
+    }
+  }
+}
+
+.antwort {
+  margin: 0.625rem 0 0;
+  padding-left: 2.25rem;
+  font-size: 1rem;
+  min-height: 1.5rem;
+
+  &.leer {
+    color: var(--p-text-muted-color);
+    font-size: 0.875rem;
+    font-style: italic;
+  }
+}
+
+/* ---------- Buzzer ---------- */
+
+.buzzer-flaeche {
+  display: flex;
+  justify-content: center;
+  padding: 1.5rem 0 2rem;
+}
+
+.buzzer {
+  width: min(16rem, 60vw);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 0;
+  display: grid;
+  place-content: center;
+  gap: 0.25rem;
+  background: var(--p-surface-300);
+  color: var(--p-surface-600);
+  font: inherit;
+  cursor: not-allowed;
+  /* Der Ring liegt aussen und wird beim Druck flacher -- das ist die einzige
+     Bewegung auf der Seite und gehoert zur Handlung. */
+  box-shadow: 0 0.5rem 0 var(--p-surface-400);
+  transition:
+    transform 80ms ease,
+    box-shadow 80ms ease;
+
+  &.bereit {
+    background: var(--buzz);
+    color: #fff;
+    cursor: pointer;
+    box-shadow: 0 0.5rem 0 var(--buzz-dunkel);
+  }
+
+  &.bereit:active {
+    transform: translateY(0.4rem);
+    box-shadow: 0 0.1rem 0 var(--buzz-dunkel);
+  }
+}
+
+.buzzer-wort {
+  font-size: clamp(1.5rem, 6vw, 2rem);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.buzzer-platz {
+  font-size: clamp(2.5rem, 12vw, 4rem);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.buzzer-zeit {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.875rem;
+  opacity: 0.75;
+}
+
+.antwort-feld {
+  width: 100%;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid var(--p-surface-300);
+  border-radius: 8px;
+  background: var(--p-surface-0);
+  color: var(--p-text-color);
+  font: inherit;
+  font-size: 1.0625rem;
+
+  &:focus {
+    outline: 2px solid var(--p-primary-color);
+    outline-offset: 1px;
+    border-color: transparent;
+  }
+}
+
+.buzzerliste {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.625rem;
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .name {
+    margin-right: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .buzzer {
+    transition: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .spieler-kopf {
+    flex-wrap: wrap;
+
+    .name {
+      min-width: 8rem;
+    }
+  }
+
+  .antwort {
+    padding-left: 0;
+  }
+}

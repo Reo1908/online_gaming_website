@@ -1,0 +1,98 @@
+/* Bausteine, die jede Spielansicht braucht.
+   Angular kapselt Stile je Komponente -- ohne diese gemeinsame Datei staende
+   dieselbe Karte in jedem Spiel noch einmal, und beim naechsten Spiel ein
+   drittes Mal. */
+
+.karte {
+  border: 1px solid var(--p-surface-200);
+  border-radius: 10px;
+  background: var(--p-surface-0);
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+
+  h2 {
+    font-size: 0.8125rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--p-text-muted-color);
+    margin: 0 0 1rem;
+  }
+}
+
+.leute {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.625rem;
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+  }
+
+  .name {
+    margin-right: auto;
+  }
+}
+
+/* Der Punkt sagt, wer gerade wirklich am Platz sitzt -- wichtiger, als es
+   aussieht: Ohne ihn wartet die Runde auf jemanden, der laengst weg ist. */
+.punkt {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--p-surface-300);
+  flex: none;
+
+  &.an {
+    background: #22c55e;
+  }
+}
+
+.platz {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--platte, #151a23);
+  color: var(--platte-text, #f4f6fb);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  flex: none;
+
+  &.leer {
+    background: var(--p-surface-200);
+  }
+}
+
+.zeit {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8125rem;
+  color: var(--p-text-muted-color);
+}
+
+.punkte {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  min-width: 2.5rem;
+  text-align: right;
+}
+
+.weg {
+  font-size: 0.75rem;
+  color: var(--p-text-muted-color);
+  margin-left: 0.375rem;
+}
+
+.muted {
+  color: var(--p-text-muted-color);
+  margin: 0 0 1rem;
+}
+
+.klein {
+  font-size: 0.875rem;
+}

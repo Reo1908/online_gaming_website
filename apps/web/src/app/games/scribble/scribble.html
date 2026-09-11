@@ -1,0 +1,190 @@
+<!-- Kopfzeile: Runde, Wort und die Zeit, die noch bleibt. -->
+<section class="zugkopf">
+  <span class="rundenzahl">Runde {{ runde() }}/{{ runden() }}</span>
+
+  <span class="wort" [class.gelesen]="wort()">
+    @if (phase() === 'WORTWAHL') {
+      <span class="wartet">
+        {{ binZeichner() ? 'Du bist dran — such dir ein Wort aus' : zeichner()?.displayName + ' sucht ein Wort aus' }}
+      </span>
+    } @else {
+      {{ wortAnzeige() }}
+    }
+  </span>
+
+  <span class="uhr" [class.knapp]="knapp()">{{ restSekunden() }}</span>
+</section>
+
+<div class="balken" aria-hidden="true">
+  <span [style.width.%]="restAnteil() * 100" [class.knapp]="knapp()"></span>
+</div>
+
+<div class="tisch">
+  <div class="links">
+    <!-- Die Leinwand bleibt immer stehen: Sonst springt die Seite bei jedem
+         Phasenwechsel, und wer gerade zeichnet, verliert den Strich. -->
+    <div class="leinwand-rahmen">
+      <app-zeichenflaeche
+        [darfZeichnen]="darfZeichnen()"
+        [farbe]="farbe()"
+        [breite]="breite()"
+        (strich)="strichSenden($event)"
+      />
+
+      @if (phase() === 'WORTWAHL' && binZeichner() && wahl()) {
+        <div class="ueberlage">
+          <p class="ueberlage-titel">Welches Wort zeichnest du?</p>
+          <div class="wortwahl">
+            @for (w of wahl(); track w) {
+              <button type="button" class="wortknopf" (click)="wortWaehlen(w)">{{ w }}</button>
+            }
+          </div>
+          <p class="ueberlage-klein">Ohne Auswahl gilt nach Ablauf das erste Wort.</p>
+        </div>
+      } @else if (phase() === 'WORTWAHL') {
+        <div class="ueberlage">
+          <p class="ueberlage-titel">{{ zeichner()?.displayName }} sucht ein Wort aus</p>
+          <p class="ueberlage-klein">Gleich geht es los.</p>
+        </div>
+      } @else if (phase() === 'ZUGENDE') {
+        <div class="ueberlage">
+          <p class="ueberlage-klein">Das Wort war</p>
+          <p class="ueberlage-wort">{{ wort() }}</p>
+
+          @if (zugPunkte().length > 0) {
+            <ul class="zugpunkte">
+              @for (z of zugPunkte(); track z.name) {
+                <li>
+                  <span class="name">{{ z.name }}</span>
+                  <span class="plus">+{{ z.punkte }}</span>
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="ueberlage-klein">Diesmal hat es niemand erkannt.</p>
+          }
+        </div>
+      }
+    </div>
+
+    <!-- Werkzeuge nur für den, der auch zeichnen darf. -->
+    @if (darfZeichnen()) {
+      <div class="werkzeuge">
+        <div class="farbwahl">
+          @for (f of farben; track f) {
+            <button
+              type="button"
+              class="farbe"
+              [class.aktiv]="farbe() === f"
+              [class.hell]="f === '#ffffff'"
+              [style.background]="f"
+              [attr.aria-label]="f === '#ffffff' ? 'Radieren' : 'Farbe ' + f"
+              [attr.aria-pressed]="farbe() === f"
+              (click)="farbe.set(f)"
+            ></button>
+          }
+        </div>
+
+        <div class="breitwahl">
+          @for (b of breiten; track b) {
+            <button
+              type="button"
+              class="breite"
+              [class.aktiv]="breite() === b"
+              [attr.aria-label]="'Strichstärke ' + b"
+              [attr.aria-pressed]="breite() === b"
+              (click)="breite.set(b)"
+            >
+              <span [style.width.px]="b" [style.height.px]="b"></span>
+            </button>
+          }
+        </div>
+
+        <div class="werkzeug-knoepfe">
+          <p-button
+            label="Zurück"
+            icon="pi pi-undo"
+            severity="secondary"
+            [outlined]="true"
+            size="small"
+            (onClick)="zurueck()"
+          />
+          <p-button
+            label="Leeren"
+            icon="pi pi-trash"
+            severity="secondary"
+            [text]="true"
+            size="small"
+            (onClick)="leeren()"
+          />
+        </div>
+      </div>
+    } @else if (phase() === 'ZEICHNEN') {
+      <p class="hinweiszeile">
+        @if (habeGeraten()) {
+          <i class="pi pi-check-circle" aria-hidden="true"></i> Du hast das Wort. Weitersagen gilt nicht.
+        } @else {
+          {{ zeichner()?.displayName }} zeichnet — tipp deinen Tipp unten ein.
+        }
+      </p>
+    }
+  </div>
+
+  <div class="rechts">
+    <section class="karte">
+      <h2>Punkte</h2>
+      <ul class="leute">
+        @for (t of rangliste(); track t.userId) {
+          <li [class.dran]="t.zeichnet" [class.hat]="t.hatGeraten">
+            <span class="punkt" [class.an]="t.verbunden" aria-hidden="true"></span>
+            <span class="name">
+              {{ t.userId === ichId() ? 'Du' : t.displayName }}
+              @if (t.zeichnet) {
+                <i class="pi pi-pencil" aria-hidden="true" title="zeichnet gerade"></i>
+              } @else if (t.hatGeraten) {
+                <i class="pi pi-check" aria-hidden="true" title="hat das Wort"></i>
+              }
+            </span>
+            <span class="punkte">{{ t.punkte }}</span>
+          </li>
+        }
+      </ul>
+    </section>
+
+    <section class="karte chatkarte">
+      <h2>Tipps</h2>
+
+      <ul class="chat">
+        @for (n of chat(); track n.id) {
+          <li [class]="'art-' + n.art">
+            @if (n.art === 'system') {
+              <span class="system">{{ n.text }}</span>
+            } @else if (n.art === 'treffer') {
+              <span class="treffer">{{ n.text }}</span>
+            } @else {
+              <span class="wer">{{ n.name }}</span>
+              <span class="was">{{ n.text }}</span>
+              @if (n.nurWissende) {
+                <span class="intern" title="Sehen nur die, die das Wort schon haben">intern</span>
+              }
+            }
+          </li>
+        } @empty {
+          <li class="art-system"><span class="system">Noch nichts geraten.</span></li>
+        }
+      </ul>
+
+      <form class="rateform" (submit)="$event.preventDefault(); abschicken()">
+        <input
+          type="text"
+          maxlength="80"
+          autocomplete="off"
+          [placeholder]="darfRaten() ? 'Tipp eingeben …' : binZeichner() ? 'Nur an die, die es haben' : 'Warten …'"
+          [value]="eingabe()"
+          (input)="eingabe.set($any($event.target).value)"
+        />
+        <p-button type="submit" icon="pi pi-send" ariaLabel="Abschicken" [disabled]="!eingabe().trim()" />
+      </form>
+    </section>
+  </div>
+</div>

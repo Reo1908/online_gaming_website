@@ -1,0 +1,384 @@
+@use '../gemeinsam' as *;
+
+:host {
+  --platte: #151a23;
+  --platte-text: #f4f6fb;
+  /* Warnfarbe fuer die letzten Sekunden. Dieselbe Rolle wie das Rot des
+     Buzzers: Sie gehoert zur Handlung, nicht zur Dekoration. */
+  --knapp: #d31f3c;
+
+  display: block;
+}
+
+/* ---------- Kopf ---------- */
+
+.zugkopf {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--p-surface-200);
+  border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+  background: var(--p-surface-0);
+}
+
+.rundenzahl {
+  font-size: 0.8125rem;
+  color: var(--p-text-muted-color);
+  white-space: nowrap;
+}
+
+/* Das gesuchte Wort ist das Einzige, worauf beim Raten alle schauen --
+   deshalb steht es mittig, gross und gesperrt. Die Sperrung ist hier nicht
+   Geschmack: Ohne sie laufen die Unterstriche zu einem Balken zusammen und
+   niemand kann die Buchstaben zaehlen. */
+.wort {
+  flex: 1;
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: clamp(1.125rem, 3.5vw, 1.75rem);
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
+  min-height: 1.5em;
+}
+
+.wort .wartet {
+  font-family: inherit;
+  font-size: 0.9375rem;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-indent: 0;
+  color: var(--p-text-muted-color);
+}
+
+.uhr {
+  font-variant-numeric: tabular-nums;
+  font-size: 1.25rem;
+  font-weight: 700;
+  min-width: 2.5ch;
+  text-align: right;
+
+  &.knapp {
+    color: var(--knapp);
+  }
+}
+
+.balken {
+  height: 4px;
+  background: var(--p-surface-200);
+  overflow: hidden;
+
+  span {
+    display: block;
+    height: 100%;
+    background: var(--p-primary-color);
+    /* Der Balken laeuft in Vierteln herein; ohne den Uebergang zuckt er. */
+    transition: width 250ms linear;
+
+    &.knapp {
+      background: var(--knapp);
+    }
+  }
+}
+
+/* ---------- Aufteilung ---------- */
+
+.tisch {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 20rem;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.links {
+  min-width: 0;
+}
+
+.rechts {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+/* ---------- Leinwand ---------- */
+
+.leinwand-rahmen {
+  position: relative;
+}
+
+/* Liegt ueber der Leinwand, statt sie zu ersetzen: So bleibt die Zeichnung
+   beim Aufloesen sichtbar und die Seite springt zwischen den Phasen nicht. */
+.ueberlage {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 0.75rem;
+  padding: 1.5rem;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--platte) 88%, transparent);
+  color: var(--platte-text);
+  text-align: center;
+}
+
+.ueberlage-titel {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.ueberlage-klein {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: color-mix(in srgb, var(--platte-text) 65%, transparent);
+}
+
+.ueberlage-wort {
+  margin: 0;
+  font-size: clamp(1.75rem, 7vw, 2.75rem);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.wortwahl {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.wortknopf {
+  padding: 0.625rem 1.125rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--platte-text) 35%, transparent);
+  background: transparent;
+  color: var(--platte-text);
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+
+  &:hover {
+    background: color-mix(in srgb, var(--platte-text) 14%, transparent);
+  }
+}
+
+.zugpunkte {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+  min-width: 12rem;
+
+  li {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.9375rem;
+  }
+
+  .name {
+    margin-right: auto;
+  }
+
+  .plus {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: #4ade80;
+  }
+}
+
+/* ---------- Werkzeuge ---------- */
+
+.werkzeuge {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+
+.farbwahl {
+  display: flex;
+  gap: 0.375rem;
+}
+
+.farbe {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  box-shadow: 0 0 0 1px var(--p-surface-300);
+  cursor: pointer;
+  padding: 0;
+
+  &.aktiv {
+    border-color: var(--p-surface-0);
+    box-shadow: 0 0 0 2px var(--p-text-color);
+  }
+}
+
+.breitwahl {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.breite {
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  border: 1px solid var(--p-surface-300);
+  background: var(--p-surface-0);
+  cursor: pointer;
+
+  span {
+    display: block;
+    border-radius: 50%;
+    background: var(--p-text-color);
+  }
+
+  &.aktiv {
+    border-color: var(--p-primary-color);
+  }
+}
+
+.werkzeug-knoepfe {
+  display: flex;
+  gap: 0.25rem;
+  margin-left: auto;
+}
+
+.hinweiszeile {
+  margin: 0.75rem 0 0;
+  font-size: 0.875rem;
+  color: var(--p-text-muted-color);
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+/* ---------- Punkte und Chat ---------- */
+
+.leute li {
+  padding: 0.25rem 0.5rem;
+  margin: 0 -0.5rem;
+  border-radius: 6px;
+
+  /* Wer gerade zeichnet und wer das Wort schon hat, sind die beiden Dinge,
+     die man im Blick behalten will -- alles andere bleibt farblos. */
+  &.dran {
+    background: color-mix(in srgb, var(--p-primary-color) 10%, transparent);
+  }
+
+  &.hat .name {
+    color: #16a34a;
+  }
+
+  .name {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+  }
+
+  i {
+    font-size: 0.75rem;
+  }
+}
+
+.chatkarte {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 16rem;
+}
+
+.chat {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  /* Neueste unten, wie in jedem Chat: Deshalb faengt die Liste am Boden an. */
+  justify-content: flex-end;
+  flex: 1;
+  overflow-y: auto;
+  max-height: 18rem;
+  font-size: 0.875rem;
+
+  li {
+    display: flex;
+    gap: 0.375rem;
+    align-items: baseline;
+  }
+
+  .wer {
+    font-weight: 600;
+    flex: none;
+  }
+
+  .was {
+    overflow-wrap: anywhere;
+  }
+
+  .system {
+    color: var(--p-text-muted-color);
+    font-style: italic;
+  }
+
+  .treffer {
+    color: #16a34a;
+    font-weight: 600;
+  }
+
+  .intern {
+    margin-left: auto;
+    font-size: 0.6875rem;
+    color: var(--p-text-muted-color);
+    flex: none;
+  }
+}
+
+.rateform {
+  display: flex;
+  gap: 0.375rem;
+
+  input {
+    flex: 1;
+    min-width: 0;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--p-surface-300);
+    border-radius: 8px;
+    background: var(--p-surface-0);
+    color: var(--p-text-color);
+    font: inherit;
+
+    &:focus {
+      outline: 2px solid var(--p-primary-color);
+      outline-offset: 1px;
+      border-color: transparent;
+    }
+  }
+}
+
+@media (max-width: 900px) {
+  .tisch {
+    grid-template-columns: 1fr;
+  }
+
+  .chat {
+    max-height: 12rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .balken span {
+    transition: none;
+  }
+}

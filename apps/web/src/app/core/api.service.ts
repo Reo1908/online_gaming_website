@@ -2,11 +2,15 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import type { Observable } from 'rxjs';
 import type {
+  AdminThema,
   AdminUser,
   CreateUserInput,
   Partie,
+  PartieAendern,
   PartieAnlegen,
   SpielArt,
+  Thema,
+  ThemaEingabe,
   OverallStats,
   StatAdjustment,
   SupportView,
@@ -61,9 +65,19 @@ export class ApiService {
     return this.http.get<SpielArt[]>('/api/games');
   }
 
+  /** Die Themengebiete, aus denen eine Lobby waehlen kann. */
+  themen(): Observable<Thema[]> {
+    return this.http.get<Thema[]>('/api/tags');
+  }
+
   /** Partien, in denen der angemeldete Benutzer gerade steckt. */
   meinePartien(): Observable<Partie[]> {
     return this.http.get<Partie[]>('/api/matches');
+  }
+
+  /** Offene, oeffentliche Lobbys fuer die Startseite. */
+  offeneLobbys(): Observable<Partie[]> {
+    return this.http.get<Partie[]>('/api/matches/oeffentlich');
   }
 
   partieAnlegen(eingabe: PartieAnlegen): Observable<Partie> {
@@ -72,6 +86,11 @@ export class ApiService {
 
   partie(code: string): Observable<Partie> {
     return this.http.get<Partie>(`/api/matches/${code}`);
+  }
+
+  /** Name, Sichtbarkeit und Themen einer wartenden Lobby. */
+  partieAendern(code: string, aenderung: PartieAendern): Observable<Partie> {
+    return this.http.patch<Partie>(`/api/matches/${code}`, aenderung);
   }
 
   partieBeitreten(code: string): Observable<Partie> {
@@ -93,6 +112,22 @@ export class ApiService {
 
   partieAbbrechen(code: string): Observable<Partie> {
     return this.http.post<Partie>(`/api/matches/${code}/abort`, {});
+  }
+
+  adminThemen(): Observable<AdminThema[]> {
+    return this.http.get<AdminThema[]>('/api/admin/tags');
+  }
+
+  themaAnlegen(eingabe: ThemaEingabe): Observable<AdminThema> {
+    return this.http.post<AdminThema>('/api/admin/tags', eingabe);
+  }
+
+  themaAendern(id: string, eingabe: ThemaEingabe): Observable<AdminThema> {
+    return this.http.patch<AdminThema>(`/api/admin/tags/${id}`, eingabe);
+  }
+
+  themaLoeschen(id: string): Observable<void> {
+    return this.http.delete<void>(`/api/admin/tags/${id}`);
   }
 
   systemStatus(): Observable<SystemStatus> {

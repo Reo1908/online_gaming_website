@@ -20,7 +20,7 @@
         </p>
       </div>
 
-      @if (status() === 'RUNNING' && !binLeitung()) {
+      @if (status() === 'RUNNING' && ich()?.spieltMit) {
         <div class="punktestand">
           <span class="zahl">{{ ich()?.punkte ?? 0 }}</span>
           <span class="wort">Punkte</span>
@@ -35,6 +35,15 @@
         <p class="muted">
           {{ p.teilnehmer.length }} warten schon. Tritt bei, dann siehst du die Runde live.
         </p>
+
+        @if (etiketten().length > 0) {
+          <ul class="etiketten">
+            @for (e of etiketten(); track e.slug) {
+              <li class="etikett" [style.--farbe]="e.farbe">{{ e.name }}</li>
+            }
+          </ul>
+        }
+
         <p-button label="Beitreten" [loading]="busy()" (onClick)="beitreten()" />
       </section>
     } @else if (status() === 'LOBBY') {
@@ -61,6 +70,9 @@
                 @if (t.istLeitung) {
                   <span class="rolle">Leitung</span>
                 }
+                @if (!t.spieltMit) {
+                  <span class="rolle">spielt nicht mit</span>
+                }
               </li>
             }
           </ul>
@@ -73,21 +85,76 @@
         <section class="karte">
           <h2>Einstellungen</h2>
           <dl class="werte">
+            @for (e of einstellungen(); track e.label) {
+              <div>
+                <dt>{{ e.label }}</dt>
+                <dd>{{ e.wert }}</dd>
+              </div>
+            }
             <div>
-              <dt>Punkte pro Treffer</dt>
-              <dd>{{ einstellungen().punkteProTreffer }}</dd>
-            </div>
-            <div>
-              <dt>Buzzern</dt>
-              <dd>{{ einstellungen().nurEinmalBuzzern ? 'einmal je Runde' : 'beliebig oft' }}</dd>
-            </div>
-            <div>
-              <dt>Antworten</dt>
-              <dd>{{ einstellungen().antwortenOeffentlich ? 'für alle sichtbar' : 'nur für die Leitung' }}</dd>
+              <dt>Lobby</dt>
+              <dd>{{ oeffentlich() ? 'öffentlich' : 'privat (nur mit Code)' }}</dd>
             </div>
           </dl>
+
+          @if (binLeitung()) {
+            <button
+              type="button"
+              class="umschalter"
+              [disabled]="busy()"
+              (click)="sichtbarkeitUmschalten()"
+            >
+              <i class="pi" [class.pi-lock]="!oeffentlich()" [class.pi-globe]="oeffentlich()"></i>
+              {{ oeffentlich() ? 'Auf privat stellen' : 'Öffentlich stellen' }}
+            </button>
+          }
         </section>
       </div>
+
+      <!-- ============ Themen ============ -->
+      <section class="karte">
+        <h2>Themen</h2>
+
+        @if (binLeitung()) {
+          <p class="muted klein">
+            Die Themen sagen, worum es geht — und beim Scribble, aus welchen Wörtern gezogen wird.
+            Ohne Auswahl zählen alle.
+          </p>
+
+          @if (themen().length > 0) {
+            <ul class="etiketten waehlbar">
+              @for (t of themen(); track t.slug) {
+                <li>
+                  <button
+                    type="button"
+                    class="etikett"
+                    [class.aktiv]="istGewaehlt(t.slug)"
+                    [style.--farbe]="t.farbe"
+                    [attr.aria-pressed]="istGewaehlt(t.slug)"
+                    [disabled]="busy()"
+                    (click)="themaUmschalten(t.slug)"
+                  >
+                    {{ t.name }}
+                    <span class="anzahl">{{ t.woerter }}</span>
+                  </button>
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="muted klein">
+              Es gibt noch keine Themen. Ein Administrator legt sie unter „Administration" an.
+            </p>
+          }
+        } @else if (etiketten().length > 0) {
+          <ul class="etiketten">
+            @for (e of etiketten(); track e.slug) {
+              <li class="etikett" [style.--farbe]="e.farbe">{{ e.name }}</li>
+            }
+          </ul>
+        } @else {
+          <p class="muted klein">Kein Thema gewählt — es zählen alle Wörter.</p>
+        }
+      </section>
 
       <div class="aktionen">
         @if (binLeitung()) {
@@ -95,7 +162,7 @@
             label="Partie starten"
             size="large"
             [loading]="busy()"
-            [disabled]="spieler().length === 0"
+            [disabled]="!genugSpieler()"
             (onClick)="starten()"
           />
           <p-button
@@ -104,6 +171,17 @@
             [text]="true"
             (onClick)="abbrechen()"
           />
+
+          @if (!genugSpieler()) {
+            <p class="warten">
+              <i class="pi pi-hourglass" aria-hidden="true"></i>
+              @if (spielSlug() === 'scribble') {
+                Scribble braucht mindestens zwei Mitspielende
+              } @else {
+                Es ist noch niemand beigetreten
+              }
+            </p>
+          }
         } @else {
           <p class="warten">
             <i class="pi pi-hourglass" aria-hidden="true"></i>
@@ -118,153 +196,30 @@
         <p-message severity="warn" text="Live-Verbindung unterbrochen — es wird neu verbunden." styleClass="voll" />
       }
 
+      @if (zustand(); as live) {
+        <!-- Ab hier gehört die Seite der Spielart. -->
+        @switch (spielSlug()) {
+          @case ('buzzer') {
+            <app-buzzer [zustand]="live" [binLeitung]="binLeitung()" [ichId]="ichId()" />
+          }
+          @case ('scribble') {
+            <app-scribble [zustand]="live" [ichId]="ichId()" />
+          }
+          @default {
+            <p class="muted">Diese Spielart kennt die Oberfläche noch nicht.</p>
+          }
+        }
+      } @else {
+        <p class="muted">Verbindung wird aufgebaut …</p>
+      }
+
       @if (binLeitung()) {
-        <!-- ----- Sicht der Spielleitung ----- -->
-        <section class="leitpult">
-          <div class="runde">
-            <span class="runde-zahl">Runde {{ runde().nummer || 1 }}</span>
-            <span class="runde-status" [class.live]="runde().laeuft">
-              {{ runde().laeuft ? 'Buzzer offen' : 'Buzzer gesperrt' }}
-            </span>
-          </div>
-
-          <div class="runde-knoepfe">
-            <p-button
-              [label]="runde().nummer === 0 ? 'Erste Runde freigeben' : 'Nächste Runde freigeben'"
-              icon="pi pi-play"
-              (onClick)="rundeStarten()"
-            />
-            <p-button
-              label="Buzzer sperren"
-              icon="pi pi-pause"
-              severity="secondary"
-              [outlined]="true"
-              [disabled]="!runde().laeuft"
-              (onClick)="rundeStoppen()"
-            />
-          </div>
-        </section>
-
-        <section class="karte">
-          <h2>Mitspieler</h2>
-
-          <ul class="spielerliste">
-            @for (t of spieler(); track t.userId) {
-              <li class="spielerzeile" [class.gebuzzert]="t.buzzerPlatz === 1">
-                <div class="spieler-kopf">
-                  @if (t.buzzerPlatz) {
-                    <span class="platz">{{ t.buzzerPlatz }}</span>
-                  } @else {
-                    <span class="platz leer" aria-hidden="true"></span>
-                  }
-
-                  <span class="name">
-                    {{ t.displayName }}
-                    @if (!t.verbunden) {
-                      <span class="weg">offline</span>
-                    }
-                  </span>
-
-                  @if (t.gebuzzertUm !== null) {
-                    <span class="zeit">{{ sekunden(t.gebuzzertUm) }}</span>
-                  }
-
-                  <span class="punkte">{{ t.punkte }}</span>
-
-                  <span class="punkt-knoepfe">
-                    <button
-                      type="button"
-                      (click)="punkte(t.userId, -1)"
-                      [attr.aria-label]="einstellungen().punkteProTreffer + ' Punkte abziehen bei ' + t.displayName"
-                    >
-                      −
-                    </button>
-                    <button
-                      type="button"
-                      class="plus"
-                      (click)="punkte(t.userId, 1)"
-                      [attr.aria-label]="einstellungen().punkteProTreffer + ' Punkte geben an ' + t.displayName"
-                    >
-                      +
-                    </button>
-                  </span>
-                </div>
-
-                <p class="antwort" [class.leer]="!t.text">
-                  {{ t.text ? t.text : 'noch nichts getippt' }}
-                </p>
-              </li>
-            }
-          </ul>
-        </section>
-
         <div class="aktionen">
-          <p-button label="Partie beenden" [loading]="busy()" (onClick)="beenden()" />
+          @if (manuellesEnde()) {
+            <p-button label="Partie beenden" [loading]="busy()" (onClick)="beenden()" />
+          }
           <p-button label="Abbrechen ohne Wertung" severity="danger" [text]="true" (onClick)="abbrechen()" />
         </div>
-      } @else {
-        <!-- ----- Sicht der Mitspieler ----- -->
-        <section class="buzzer-flaeche">
-          <button
-            type="button"
-            class="buzzer"
-            [class.bereit]="darfBuzzern()"
-            [disabled]="!darfBuzzern()"
-            (click)="buzzern()"
-          >
-            @if (ich()?.buzzerPlatz) {
-              <span class="buzzer-platz">{{ ich()?.buzzerPlatz }}.</span>
-              <span class="buzzer-zeit">{{ sekunden(ich()?.gebuzzertUm ?? null) }}</span>
-            } @else if (runde().laeuft) {
-              <span class="buzzer-wort">Buzzer</span>
-              <span class="buzzer-zeit">Leertaste</span>
-            } @else {
-              <span class="buzzer-wort">Gesperrt</span>
-              <span class="buzzer-zeit">Runde läuft nicht</span>
-            }
-          </button>
-        </section>
-
-        <section class="karte">
-          <h2>Deine Antwort</h2>
-          <input
-            type="text"
-            class="antwort-feld"
-            maxlength="200"
-            autocomplete="off"
-            placeholder="Tippen — die Spielleitung liest live mit"
-            [value]="eigenerText()"
-            (input)="textTippen($any($event.target).value)"
-          />
-        </section>
-
-        @if (amBuzzer().length > 0) {
-          <section class="karte">
-            <h2>Am Buzzer</h2>
-            <ol class="buzzerliste">
-              @for (t of amBuzzer(); track t.userId) {
-                <li>
-                  <span class="platz">{{ t.buzzerPlatz }}</span>
-                  <span class="name">{{ t.userId === ich()?.userId ? 'Du' : t.displayName }}</span>
-                  <span class="zeit">{{ sekunden(t.gebuzzertUm) }}</span>
-                </li>
-              }
-            </ol>
-          </section>
-        }
-
-        <section class="karte">
-          <h2>Punkte</h2>
-          <ul class="leute">
-            @for (t of rangliste(); track t.userId) {
-              <li>
-                <span class="punkt" [class.an]="t.verbunden" aria-hidden="true"></span>
-                <span class="name">{{ t.displayName }}</span>
-                <span class="punkte">{{ t.punkte }}</span>
-              </li>
-            }
-          </ul>
-        </section>
       }
     } @else {
       <!-- ============ Vorbei ============ -->

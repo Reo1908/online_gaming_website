@@ -1,0 +1,169 @@
+@if (fehler(); as meldung) {
+  <p-message severity="error" [text]="meldung" styleClass="full" />
+}
+@if (hinweis(); as meldung) {
+  <p-message severity="success" [text]="meldung" styleClass="full" />
+}
+
+<section class="panel">
+  <div class="panel-kopf">
+    <div>
+      <h2>Themen</h2>
+      <p class="muted small">
+        Ein Thema ist zweierlei: der Wortvorrat, aus dem Scribble zieht, und das Etikett, an dem
+        andere in der Lobbyliste sehen, worum es geht.
+      </p>
+    </div>
+
+    <p-button label="Thema anlegen" icon="pi pi-plus" (onClick)="neu()" />
+  </div>
+
+  @if (laedt()) {
+    <p class="muted">Wird geladen …</p>
+  } @else if (themen().length === 0) {
+    <p class="muted">Noch keine Themen angelegt.</p>
+  } @else {
+    <ul class="themenliste">
+      @for (t of themen(); track t.id) {
+        <li class="thema" [class.aus]="!t.isActive">
+          <span class="farbtupfer" [style.background]="t.farbe ?? '#94a3b8'" aria-hidden="true"></span>
+
+          <span class="thema-text">
+            <strong>{{ t.name }}</strong>
+            <span class="thema-meta">
+              <span class="mono">{{ t.slug }}</span> · {{ t.woerter.length }} Wörter
+              @if (!t.isActive) {
+                · nicht in der Auswahl
+              }
+            </span>
+          </span>
+
+          <span class="thema-knoepfe">
+            <p-button
+              label="Bearbeiten"
+              icon="pi pi-pencil"
+              severity="secondary"
+              [text]="true"
+              size="small"
+              (onClick)="bearbeiten(t)"
+            />
+            <p-button
+              [label]="t.isActive ? 'Deaktivieren' : 'Aktivieren'"
+              severity="secondary"
+              [text]="true"
+              size="small"
+              (onClick)="umschalten(t)"
+            />
+            <p-button
+              icon="pi pi-trash"
+              severity="danger"
+              [text]="true"
+              size="small"
+              ariaLabel="Thema löschen"
+              (onClick)="dialogFehler.set(null); loeschen.set(t)"
+            />
+          </span>
+        </li>
+      }
+    </ul>
+  }
+</section>
+
+<!-- Anlegen und Bearbeiten teilen sich einen Dialog: Die Felder sind dieselben. -->
+<p-dialog
+  [visible]="bearbeitet() !== undefined"
+  (visibleChange)="$event || bearbeitet.set(undefined)"
+  [modal]="true"
+  [draggable]="false"
+  [style]="{ width: '34rem' }"
+  [header]="istNeu() ? 'Thema anlegen' : 'Thema bearbeiten'"
+>
+  <form [formGroup]="form" (ngSubmit)="speichern()" novalidate class="dialog-form">
+    @if (dialogFehler(); as meldung) {
+      <p-message severity="error" [text]="meldung" styleClass="full" />
+    }
+
+    <div class="field">
+      <label for="themaName">Name</label>
+      <input pInputText id="themaName" formControlName="name" autocomplete="off" placeholder="Pokémon" />
+      <small>Steht als Etikett an der Lobby. Die Kurzform entsteht daraus von selbst.</small>
+    </div>
+
+    <div class="field">
+      <label id="farbeLabel">Farbe</label>
+      <div class="palette" role="group" aria-labelledby="farbeLabel">
+        @for (f of palette; track f) {
+          <button
+            type="button"
+            class="farbe"
+            [class.aktiv]="farbe() === f"
+            [style.background]="f"
+            [attr.aria-label]="'Farbe ' + f"
+            [attr.aria-pressed]="farbe() === f"
+            (click)="farbe.set(f)"
+          ></button>
+        }
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="themaWoerter">Wörter ({{ wortAnzahl() }})</label>
+      <textarea
+        pTextarea
+        id="themaWoerter"
+        formControlName="woerter"
+        rows="12"
+        spellcheck="false"
+        placeholder="Pikachu&#10;Glumanda&#10;Bisasam"
+      ></textarea>
+      <small>
+        Ein Wort je Zeile. Daraus zieht Scribble — Doppelte fallen beim Speichern weg.
+      </small>
+    </div>
+
+    <div class="dialog-actions">
+      <p-button
+        label="Abbrechen"
+        severity="secondary"
+        [text]="true"
+        (onClick)="bearbeitet.set(undefined)"
+      />
+      <p-button type="submit" label="Speichern" [loading]="busy()" [disabled]="form.invalid" />
+    </div>
+  </form>
+</p-dialog>
+
+<!-- Löschen bestätigen -->
+<p-dialog
+  [visible]="loeschen() !== null"
+  (visibleChange)="$event || loeschen.set(null)"
+  [modal]="true"
+  [draggable]="false"
+  [style]="{ width: '26rem' }"
+  header="Thema löschen"
+>
+  @if (loeschen(); as ziel) {
+    @if (dialogFehler(); as meldung) {
+      <p-message severity="error" [text]="meldung" styleClass="full" />
+    }
+
+    <p>
+      Soll <strong>{{ ziel.name }}</strong> mit {{ ziel.woerter.length }} Wörtern wirklich gelöscht
+      werden?
+    </p>
+    <p class="muted small">
+      Themen, die schon an einer Partie hängen, lassen sich nicht löschen — die deaktivierst du
+      stattdessen.
+    </p>
+
+    <div class="dialog-actions">
+      <p-button label="Abbrechen" severity="secondary" [text]="true" (onClick)="loeschen.set(null)" />
+      <p-button
+        label="Endgültig löschen"
+        severity="danger"
+        [loading]="busy()"
+        (onClick)="loeschenBestaetigen()"
+      />
+    </div>
+  }
+</p-dialog>

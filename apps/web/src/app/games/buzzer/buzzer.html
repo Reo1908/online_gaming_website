@@ -1,0 +1,143 @@
+@if (binLeitung()) {
+  <!-- ----- Sicht der Spielleitung ----- -->
+  <section class="leitpult">
+    <div class="runde">
+      <span class="runde-zahl">Runde {{ runde().nummer || 1 }}</span>
+      <span class="runde-status" [class.live]="runde().laeuft">
+        {{ runde().laeuft ? 'Buzzer offen' : 'Buzzer gesperrt' }}
+      </span>
+    </div>
+
+    <div class="runde-knoepfe">
+      <p-button
+        [label]="runde().nummer === 0 ? 'Erste Runde freigeben' : 'Nächste Runde freigeben'"
+        icon="pi pi-play"
+        (onClick)="rundeStarten()"
+      />
+      <p-button
+        label="Buzzer sperren"
+        icon="pi pi-pause"
+        severity="secondary"
+        [outlined]="true"
+        [disabled]="!runde().laeuft"
+        (onClick)="rundeStoppen()"
+      />
+    </div>
+  </section>
+
+  <section class="karte">
+    <h2>Mitspieler</h2>
+
+    <ul class="spielerliste">
+      @for (t of spieler(); track t.userId) {
+        <li class="spielerzeile" [class.gebuzzert]="t.buzzerPlatz === 1">
+          <div class="spieler-kopf">
+            @if (t.buzzerPlatz) {
+              <span class="platz">{{ t.buzzerPlatz }}</span>
+            } @else {
+              <span class="platz leer" aria-hidden="true"></span>
+            }
+
+            <span class="name">
+              {{ t.displayName }}
+              @if (!t.verbunden) {
+                <span class="weg">offline</span>
+              }
+            </span>
+
+            @if (t.gebuzzertUm != null) {
+              <span class="zeit">{{ sekunden(t.gebuzzertUm) }}</span>
+            }
+
+            <span class="punkte">{{ t.punkte }}</span>
+
+            <span class="punkt-knoepfe">
+              <button
+                type="button"
+                (click)="punkte(t.userId, -1)"
+                [attr.aria-label]="einstellungen().punkteProTreffer + ' Punkte abziehen bei ' + t.displayName"
+              >
+                −
+              </button>
+              <button
+                type="button"
+                class="plus"
+                (click)="punkte(t.userId, 1)"
+                [attr.aria-label]="einstellungen().punkteProTreffer + ' Punkte geben an ' + t.displayName"
+              >
+                +
+              </button>
+            </span>
+          </div>
+
+          <p class="antwort" [class.leer]="!t.text">
+            {{ t.text ? t.text : 'noch nichts getippt' }}
+          </p>
+        </li>
+      }
+    </ul>
+  </section>
+} @else {
+  <!-- ----- Sicht der Mitspieler ----- -->
+  <section class="buzzer-flaeche">
+    <button
+      type="button"
+      class="buzzer"
+      [class.bereit]="darfBuzzern()"
+      [disabled]="!darfBuzzern()"
+      (click)="buzzern()"
+    >
+      @if (ich()?.buzzerPlatz) {
+        <span class="buzzer-platz">{{ ich()?.buzzerPlatz }}.</span>
+        <span class="buzzer-zeit">{{ sekunden(ich()?.gebuzzertUm) }}</span>
+      } @else if (runde().laeuft) {
+        <span class="buzzer-wort">Buzzer</span>
+        <span class="buzzer-zeit">Leertaste</span>
+      } @else {
+        <span class="buzzer-wort">Gesperrt</span>
+        <span class="buzzer-zeit">Runde läuft nicht</span>
+      }
+    </button>
+  </section>
+
+  <section class="karte">
+    <h2>Deine Antwort</h2>
+    <input
+      type="text"
+      class="antwort-feld"
+      maxlength="200"
+      autocomplete="off"
+      placeholder="Tippen — die Spielleitung liest live mit"
+      [value]="eigenerText()"
+      (input)="textTippen($any($event.target).value)"
+    />
+  </section>
+
+  @if (amBuzzer().length > 0) {
+    <section class="karte">
+      <h2>Am Buzzer</h2>
+      <ol class="buzzerliste">
+        @for (t of amBuzzer(); track t.userId) {
+          <li>
+            <span class="platz">{{ t.buzzerPlatz }}</span>
+            <span class="name">{{ t.userId === ichId() ? 'Du' : t.displayName }}</span>
+            <span class="zeit">{{ sekunden(t.gebuzzertUm) }}</span>
+          </li>
+        }
+      </ol>
+    </section>
+  }
+
+  <section class="karte">
+    <h2>Punkte</h2>
+    <ul class="leute">
+      @for (t of rangliste(); track t.userId) {
+        <li>
+          <span class="punkt" [class.an]="t.verbunden" aria-hidden="true"></span>
+          <span class="name">{{ t.displayName }}</span>
+          <span class="punkte">{{ t.punkte }}</span>
+        </li>
+      }
+    </ul>
+  </section>
+}

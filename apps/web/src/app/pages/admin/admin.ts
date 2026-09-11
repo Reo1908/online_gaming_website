@@ -11,6 +11,7 @@ import { TableModule } from 'primeng/table';
 import { TabsModule } from 'primeng/tabs';
 import { TooltipModule } from 'primeng/tooltip';
 import { AdminTools } from './admin-tools';
+import { AdminThemen } from './admin-themen';
 import { ApiService } from '../../core/api.service';
 import { AuthService } from '../../core/auth.service';
 import type { AdminUser, Role, UpdateUserInput } from '../../core/models';
@@ -62,6 +63,7 @@ function passwortErzeugen(laenge = 15): string {
     TabsModule,
     TooltipModule,
     AdminTools,
+    AdminThemen,
   ],
   templateUrl: './admin.html',
   styleUrl: './admin.scss',

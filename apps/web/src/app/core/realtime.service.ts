@@ -6,9 +6,11 @@ import type { LiveZustand } from './models';
  * Die Live-Verbindung in eine Partie.
  *
  * Der Zustand kommt als Ganzes vom Server, sobald sich etwas Strukturelles
- * aendert (Beitritt, Buzzer, Punkte, Runde). Nur der getippte Text kommt
- * einzeln -- er aendert sich bei jedem Tastendruck und wird hier in den
- * vorhandenen Zustand eingesetzt, statt jedes Mal alles neu zu schicken.
+ * aendert (Beitritt, Buzzer, Punkte, Zug). Was sich dagegen dutzendfach je
+ * Sekunde aendert -- getippter Text, ein Pinselstrich -- kommt einzeln und
+ * wird hier nicht gespeichert, sondern an die Spielkomponente durchgereicht.
+ *
+ * Diese Klasse kennt deshalb kein Spiel: Sie fuehrt den Draht, nicht das Spiel.
  */
 @Injectable({ providedIn: 'root' })
 export class RealtimeService {
@@ -48,17 +50,6 @@ export class RealtimeService {
       this.letzterFehler.set(null);
     });
 
-    socket.on('spieler:text', ({ userId, text }: { userId: string; text: string }) => {
-      this.aktuellerZustand.update((alt) =>
-        alt
-          ? {
-              ...alt,
-              teilnehmer: alt.teilnehmer.map((t) => (t.userId === userId ? { ...t, text } : t)),
-            }
-          : alt,
-      );
-    });
-
     socket.on('fehler', ({ nachricht }: { nachricht: string }) => {
       this.letzterFehler.set(nachricht);
     });
@@ -71,23 +62,52 @@ export class RealtimeService {
     this.verbindungSteht.set(false);
   }
 
-  textSenden(text: string): void {
-    this.socket?.emit('text:setzen', { text });
+  /** Schickt ein Ereignis an das Spielmodul auf dem Server. */
+  senden(ereignis: string, nutzlast?: unknown): void {
+    this.socket?.emit(ereignis, nutzlast);
   }
 
-  buzzern(): void {
-    this.socket?.emit('buzzern');
+  /**
+   * Horcht auf ein Ereignis der Spielart.
+   *
+   * Gibt eine Funktion zum Abmelden zurueck -- die Spielkomponente ruft sie
+   * beim Verlassen. Ohne das blieben beim Wechsel zwischen zwei Partien die
+   * alten Zuhoerer stehen und jedes Ereignis kaeme doppelt an.
+   */
+  horchen<T>(ereignis: string, tun: (daten: T) => void): () => void {
+    const socket = this.socket;
+    if (!socket) return () => undefined;
+
+    socket.on(ereignis, tun as (...args: unknown[]) => void);
+    return () => socket.off(ereignis, tun as (...args: unknown[]) => void);
   }
 
-  rundeStarten(): void {
-    this.socket?.emit('runde:starten');
+  /**
+   * Setzt ein Feld eines Teilnehmers im vorhandenen Zustand.
+   *
+   * Fuer die kleinen Einzelmeldungen, die nicht den ganzen Zustand nach sich
+   * ziehen sollen -- beim Buzzer der getippte Text.
+   */
+  teilnehmerSetzen(userId: string, felder: Record<string, unknown>): void {
+    this.aktuellerZustand.update((alt) =>
+      alt
+        ? {
+            ...alt,
+            teilnehmer: alt.teilnehmer.map((t) => (t.userId === userId ? { ...t, ...felder } : t)),
+          }
+        : alt,
+    );
   }
 
-  rundeStoppen(): void {
-    this.socket?.emit('runde:stoppen');
-  }
-
-  punkteGeben(userId: string, punkte: number): void {
-    this.socket?.emit('punkte:geben', { userId, punkte });
+  /** Ersetzt einen Teil des spielabhaengigen Zustands, ohne auf den Server zu warten. */
+  spielZustandSetzen(felder: Record<string, unknown>): void {
+    this.aktuellerZustand.update((alt) =>
+      alt
+        ? {
+            ...alt,
+            spielZustand: { ...(alt.spielZustand as object | null), ...felder },
+          }
+        : alt,
+    );
   }
 }

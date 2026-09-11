@@ -3,6 +3,7 @@
 <p-tabs value="benutzer">
   <p-tablist>
     <p-tab value="benutzer"><i class="pi pi-users"></i> Benutzer</p-tab>
+    <p-tab value="themen"><i class="pi pi-tags"></i> Themen</p-tab>
     <p-tab value="werkzeuge"><i class="pi pi-wrench"></i> Werkzeuge</p-tab>
   </p-tablist>
 
@@ -191,6 +192,12 @@
   }
 </section>
 
+    </p-tabpanel>
+
+    <p-tabpanel value="themen">
+      <!-- Laedt seine Themen selbst: Sie haben mit der Benutzerliste nichts
+           zu tun, und wer nie auf diesen Reiter klickt, holt sie auch nicht. -->
+      <app-admin-themen />
     </p-tabpanel>
 
     <p-tabpanel value="werkzeuge">

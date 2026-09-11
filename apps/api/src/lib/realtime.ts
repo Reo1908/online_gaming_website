@@ -1,60 +1,207 @@
 import type { FastifyInstance } from 'fastify';
 import { Server, type Socket } from 'socket.io';
-import { z } from 'zod';
 import { prisma } from './prisma.js';
 import { env } from './env.js';
 import { SESSION_COOKIE, resolveSession, type SessionUser } from './session.js';
+import { partieInfoLaden, partieAbschliessen, woerterZurPartie } from './partie.js';
+import { brueckeSetzen } from '../games/bruecke.js';
+import { liveVerwerfen, spielart } from '../games/index.js';
+import type { PartieInfo, SpielKontext, SpielModul, Zuschauer } from '../games/typen.js';
 
 /**
- * Der Live-Teil einer Partie: was gerade getippt wurde, wer gebuzzert hat und
- * welche Runde laeuft.
+ * Der Draht zwischen Browser und Spiel.
  *
- * Bewusst nur im Arbeitsspeicher. Diese Werte gelten je Frage fuer ein paar
- * Sekunden -- sie in die Datenbank zu schreiben hiesse, bei jedem Tastendruck
- * zu schreiben. Was bleiben muss, steht dort: Punkte, Teilnehmer, Status.
- * Ein Neustart der API kostet also die laufende Runde, nicht den Spielstand.
+ * Diese Datei kennt kein einziges Spiel. Sie meldet Sockets an, haelt sie je
+ * Partie zusammen, baut den gemeinsamen Teil des Zustands (wer ist da, wer
+ * ist online, wie stehen die Punkte) und reicht alles Uebrige an das Modul
+ * der Spielart weiter. Was ein Buzzer oder ein Pinselstrich ist, steht in
+ * `src/games/` -- hier nicht.
  */
-interface LiveSpieler {
-  text: string;
-  /** Millisekunden seit Rundenstart, null solange nicht gebuzzert. */
-  gebuzzertUm: number | null;
-  /** Mehrere offene Tabs zaehlen mit, sonst wirkt der Spieler beim Schliessen eines Tabs offline. */
-  verbindungen: number;
+
+interface SocketDaten {
+  user: SessionUser;
+  code?: string;
+  istLeitung?: boolean;
 }
 
-interface LivePartie {
-  runde: number;
-  rundeLaeuft: boolean;
-  rundeGestartetUm: number | null;
-  spieler: Map<string, LiveSpieler>;
-}
-
-const partien = new Map<string, LivePartie>();
+type PartieSocket = Socket & { data: SocketDaten };
 
 let io: Server | null = null;
 
-const TEXT_MAX = 200;
+/**
+ * Die offenen Verbindungen je Partie.
+ *
+ * Bewusst eine eigene Liste statt der Socket.IO-Raeume: Der Zustand faellt
+ * fuer jeden anders aus -- beim Scribble sieht der Zeichner das Wort, die
+ * anderen nur die Luecken. Dafuer muss jeder Socket einzeln erreichbar sein,
+ * und ein Raum gibt genau das nicht her.
+ */
+const verbindungen = new Map<string, Set<PartieSocket>>();
 
-function livePartie(code: string): LivePartie {
-  let partie = partien.get(code);
-  if (!partie) {
-    partie = { runde: 0, rundeLaeuft: false, rundeGestartetUm: null, spieler: new Map() };
-    partien.set(code, partie);
+function sockets(code: string): Set<PartieSocket> {
+  let menge = verbindungen.get(code);
+  if (!menge) {
+    menge = new Set();
+    verbindungen.set(code, menge);
   }
-  return partie;
+  return menge;
 }
 
-function liveSpieler(partie: LivePartie, userId: string): LiveSpieler {
-  let spieler = partie.spieler.get(userId);
-  if (!spieler) {
-    spieler = { text: '', gebuzzertUm: null, verbindungen: 0 };
-    partie.spieler.set(userId, spieler);
+function istVerbunden(code: string, userId: string): boolean {
+  for (const socket of verbindungen.get(code) ?? []) {
+    if (socket.data.user.id === userId) return true;
   }
-  return spieler;
+  return false;
 }
 
-const raum = (code: string) => `partie:${code}`;
-const raumLeitung = (code: string) => `partie:${code}:leitung`;
+// ---------- Zustand senden --------------------------------------------------
+
+/**
+ * Schickt den aktuellen Zustand an alle in der Partie -- jedem seine Sicht.
+ *
+ * Wird auch von den REST-Routen aufgerufen: Wer beitritt oder die Partie
+ * startet, tut das ueber HTTP. Die anderen sollen es trotzdem sofort sehen,
+ * ohne die Seite neu zu laden.
+ */
+export async function liveZustandSenden(code: string): Promise<void> {
+  const offen = verbindungen.get(code);
+  if (!io || !offen || offen.size === 0) return;
+
+  const partie = await partieInfoLaden(code, (userId) => istVerbunden(code, userId));
+  if (!partie) return;
+
+  const spiel = spielart(partie.spiel.slug);
+
+  // Einmal aus der Datenbank lesen, dann je Zuschauer nur noch formen: Der
+  // teure Teil ist die Abfrage, nicht das Zusammensetzen.
+  for (const socket of offen) {
+    const fuer: Zuschauer = {
+      userId: socket.data.user.id,
+      istLeitung: socket.data.istLeitung === true,
+    };
+    socket.emit('zustand', zustandFuer(partie, spiel, fuer));
+  }
+}
+
+function zustandFuer(partie: PartieInfo, spiel: SpielModul | undefined, fuer: Zuschauer) {
+  return {
+    code: partie.code,
+    name: partie.name,
+    status: partie.status,
+    oeffentlich: partie.oeffentlich,
+    spiel: partie.spiel,
+    einstellungen: partie.einstellungen,
+    etiketten: partie.etiketten,
+    teilnehmer: partie.teilnehmer.map((t) => ({
+      ...t,
+      ...(spiel?.spielerSicht?.(partie, t.userId, fuer) ?? {}),
+    })),
+    // Alles Spielabhaengige liegt unter einem Schluessel statt verstreut im
+    // Zustand: So kann eine neue Spielart ihn fuellen, ohne dass jemand hier
+    // etwas dazuschreibt.
+    spielZustand: spiel?.sicht(partie, fuer) ?? null,
+  };
+}
+
+// ---------- Kontext fuer die Spielmodule ------------------------------------
+
+/**
+ * Baut den Kontext, mit dem ein Spielmodul nach aussen spricht.
+ *
+ * `ausloeser` fehlt, wenn das Spiel selbst etwas anstoesst -- etwa wenn beim
+ * Scribble die Zeit ablaeuft und gerade niemand etwas gedrueckt hat.
+ */
+function kontext(code: string, ausloeser?: PartieSocket): SpielKontext {
+  const an = (userId: string, ereignis: string, daten: unknown) => {
+    for (const socket of verbindungen.get(code) ?? []) {
+      // Ueber alle offenen Tabs derselben Person, nicht nur den einen Socket.
+      if (socket.data.user.id === userId) socket.emit(ereignis, daten);
+    }
+  };
+
+  return {
+    code,
+    userId: ausloeser?.data.user.id ?? '',
+    istLeitung: ausloeser?.data.istLeitung === true,
+
+    anAlle(ereignis, daten) {
+      for (const socket of verbindungen.get(code) ?? []) socket.emit(ereignis, daten);
+    },
+
+    anAndere(ereignis, daten) {
+      for (const socket of verbindungen.get(code) ?? []) {
+        if (socket !== ausloeser) socket.emit(ereignis, daten);
+      }
+    },
+
+    an,
+
+    anLeitung(ereignis, daten) {
+      for (const socket of verbindungen.get(code) ?? []) {
+        if (socket.data.istLeitung) socket.emit(ereignis, daten);
+      }
+    },
+
+    senden: () => liveZustandSenden(code),
+
+    partie: () => partieInfoLaden(code, (userId) => istVerbunden(code, userId)),
+
+    woerter: () => woerterZurPartie(code),
+
+    async punkteGeben(userId, punkte) {
+      // Lesen und Schreiben statt `increment`: `score` darf leer sein, und in
+      // SQL bleibt NULL + 20 wieder NULL -- die ersten Punkte einer Partie
+      // waeren sonst spurlos verschwunden.
+      return prisma.$transaction(async (tx) => {
+        const partie = await tx.match.findUnique({ where: { code }, select: { id: true } });
+        if (!partie) return false;
+
+        const eintrag = await tx.matchPlayer.findFirst({
+          where: { matchId: partie.id, userId, isPlaying: true },
+          select: { id: true, score: true },
+        });
+        if (!eintrag) return false;
+
+        await tx.matchPlayer.update({
+          where: { id: eintrag.id },
+          data: { score: (eintrag.score ?? 0) + punkte },
+        });
+
+        return true;
+      });
+    },
+
+    async beenden() {
+      const ergebnis = await partieAbschliessen(code);
+      if (!ergebnis) return;
+
+      // Erst senden, dann wegraeumen: Sonst steht der Endstand niemandem mehr
+      // zur Verfuegung, der ihn gerade sehen sollte.
+      await liveZustandSenden(code);
+      liveVerwerfen(code);
+    },
+  };
+}
+
+/** Raeumt den Live-Teil weg, sobald eine Partie vorbei ist. */
+export function liveZustandVerwerfen(code: string): void {
+  liveVerwerfen(code);
+}
+
+/**
+ * Sagt dem Spielmodul, dass die Partie losgeht.
+ *
+ * Wird von der Start-Route gerufen: Scribble legt hier seinen Zug an, der
+ * Buzzer braucht nichts davon.
+ */
+export async function livePartieGestartet(code: string, slug: string): Promise<void> {
+  const spiel = spielart(slug);
+  if (!spiel?.gestartet) return;
+
+  await spiel.gestartet(kontext(code));
+}
+
+// ---------- Anmeldung -------------------------------------------------------
 
 /**
  * Liest einen Cookie-Wert aus dem Handshake.
@@ -76,145 +223,10 @@ function cookieLesen(header: string | undefined, name: string): string | undefin
   return undefined;
 }
 
-interface SocketDaten {
-  user: SessionUser;
-  code?: string;
-  istLeitung?: boolean;
-}
-
-type PartieSocket = Socket & { data: SocketDaten };
-
-/** Der Zustand, wie ihn die Oberflaeche bekommt. */
-interface Zustand {
-  code: string;
-  name: string;
-  status: string;
-  spiel: { slug: string; name: string };
-  einstellungen: Record<string, unknown>;
-  runde: { nummer: number; laeuft: boolean; gestartetUm: number | null };
-  teilnehmer: Array<{
-    userId: string;
-    displayName: string;
-    istLeitung: boolean;
-    punkte: number;
-    verbunden: boolean;
-    gebuzzertUm: number | null;
-    /** Rang am Buzzer: 1 fuer den Ersten. Null, wer nicht gebuzzert hat. */
-    buzzerPlatz: number | null;
-    /** Nur fuer die Spielleitung -- oder fuer alle, wenn so eingestellt. */
-    text?: string;
-  }>;
-}
-
-/**
- * Baut den Zustand aus Datenbank und Live-Teil zusammen.
- *
- * `mitTexten` entscheidet, ob die getippten Antworten mitgehen: die Leitung
- * sieht sie immer, die Mitspieler nur, wenn die Partie darauf eingestellt ist.
- */
-async function zustandBauen(code: string, mitTexten: boolean): Promise<Zustand | null> {
-  const partie = await prisma.match.findUnique({
-    where: { code },
-    select: {
-      code: true,
-      name: true,
-      status: true,
-      settings: true,
-      game: { select: { slug: true, name: true } },
-      players: {
-        select: {
-          userId: true,
-          isGamemaster: true,
-          score: true,
-          user: { select: { displayName: true } },
-        },
-        orderBy: { joinedAt: 'asc' },
-      },
-    },
-  });
-
-  if (!partie) return null;
-
-  const live = livePartie(code);
-
-  // Reihenfolge am Buzzer: wer zuerst gedrueckt hat, steht auf 1.
-  const reihenfolge = [...live.spieler.entries()]
-    .filter(([, s]) => s.gebuzzertUm !== null)
-    .sort((a, b) => (a[1].gebuzzertUm ?? 0) - (b[1].gebuzzertUm ?? 0))
-    .map(([userId]) => userId);
-
-  return {
-    code: partie.code,
-    name: partie.name,
-    status: partie.status,
-    spiel: partie.game,
-    einstellungen: (partie.settings ?? {}) as Record<string, unknown>,
-    runde: {
-      nummer: live.runde,
-      laeuft: live.rundeLaeuft,
-      gestartetUm: live.rundeGestartetUm,
-    },
-    teilnehmer: partie.players.map((p) => {
-      const s = live.spieler.get(p.userId);
-      const platz = reihenfolge.indexOf(p.userId);
-
-      return {
-        userId: p.userId,
-        displayName: p.user.displayName,
-        istLeitung: p.isGamemaster,
-        punkte: p.score ?? 0,
-        verbunden: (s?.verbindungen ?? 0) > 0,
-        gebuzzertUm: s?.gebuzzertUm ?? null,
-        buzzerPlatz: platz === -1 ? null : platz + 1,
-        ...(mitTexten ? { text: s?.text ?? '' } : {}),
-      };
-    }),
-  };
-}
-
-function antwortenOeffentlich(zustand: Zustand): boolean {
-  return zustand.einstellungen['antwortenOeffentlich'] === true;
-}
-
-/**
- * Schickt den aktuellen Zustand an alle im Raum.
- *
- * Wird auch von den REST-Routen aufgerufen: wer beitritt oder die Partie
- * startet, tut das ueber HTTP -- die anderen im Raum sollen es trotzdem
- * sofort sehen, ohne die Seite neu zu laden.
- */
-export async function liveZustandSenden(code: string): Promise<void> {
-  if (!io) return;
-
-  const fuerLeitung = await zustandBauen(code, true);
-  if (!fuerLeitung) return;
-
-  io.to(raumLeitung(code)).emit('zustand', fuerLeitung);
-
-  // Die Leitung ist nur im Leitungsraum, bekommt diesen Aufruf also nicht
-  // doppelt -- und die Mitspieler sehen die Texte nur, wenn es erlaubt ist.
-  const fuerSpieler = antwortenOeffentlich(fuerLeitung)
-    ? fuerLeitung
-    : await zustandBauen(code, false);
-
-  if (fuerSpieler) io.to(raum(code)).emit('zustand', fuerSpieler);
-}
-
-/** Raeumt den Live-Teil weg, sobald eine Partie vorbei ist. */
-export function liveZustandVerwerfen(code: string): void {
-  partien.delete(code);
-}
-
-const textSchema = z.object({ text: z.string().max(TEXT_MAX) });
-const punkteSchema = z.object({
-  userId: z.string().uuid(),
-  punkte: z.number().int().min(-1000).max(1000),
-});
-
 /**
  * Haengt die Socket-Verbindung an den laufenden HTTP-Server.
  *
- * Der Pfad liegt bewusst unter /api: so reicht der bestehende nginx-Block im
+ * Der Pfad liegt bewusst unter /api: So reicht der bestehende nginx-Block im
  * Betrieb und der Angular-Proxy in der Entwicklung -- ohne eine zweite Stelle,
  * an der ein Pfad weitergereicht werden muss.
  */
@@ -223,7 +235,12 @@ export function realtimeStarten(app: FastifyInstance): Server {
     path: '/api/socket.io',
     // Gleiche Origin wie die Anwendung; das Session-Cookie muss mit.
     cors: { origin: env.APP_ORIGIN, credentials: true },
+    // Eine Zeichnung als Ganzes ist groesser als die Vorgabe von 1 MB.
+    maxHttpBufferSize: 4e6,
   });
+
+  // Ab hier koennen die Spielmodule von sich aus senden -- siehe bruecke.ts.
+  brueckeSetzen((code) => kontext(code));
 
   io.use(async (socket, next) => {
     try {
@@ -248,7 +265,11 @@ export function realtimeStarten(app: FastifyInstance): Server {
 
       const partie = await prisma.match.findUnique({
         where: { code },
-        select: { code: true, players: { select: { userId: true, isGamemaster: true } } },
+        select: {
+          code: true,
+          game: { select: { slug: true } },
+          players: { select: { userId: true, isGamemaster: true } },
+        },
       });
 
       const eintrag = partie?.players.find((p) => p.userId === socket.data.user.id);
@@ -259,130 +280,52 @@ export function realtimeStarten(app: FastifyInstance): Server {
 
       socket.data.code = partie.code;
       socket.data.istLeitung = eintrag.isGamemaster;
-
-      // Leitung und Mitspieler sitzen in getrennten Raeumen: nur so lassen
-      // sich die getippten Antworten gezielt zurueckhalten.
-      await socket.join(eintrag.isGamemaster ? raumLeitung(partie.code) : raum(partie.code));
-
-      const live = livePartie(partie.code);
-      liveSpieler(live, socket.data.user.id).verbindungen += 1;
+      sockets(partie.code).add(socket);
 
       await liveZustandSenden(partie.code);
+
+      // Danach darf das Spiel noch nachlegen, was zu gross fuer den Zustand
+      // ist -- beim Scribble die bisherige Zeichnung.
+      await spielart(partie.game.slug)?.betreten?.(kontext(partie.code, socket));
     });
 
-    socket.on('text:setzen', async (nutzlast: unknown) => {
+    /**
+     * Alles Weitere gehoert dem Spiel.
+     *
+     * Statt jedes Ereignis hier aufzuzaehlen, faengt ein Auffangnetz sie ein
+     * und reicht sie an das Modul der Spielart durch. Eine neue Spielart
+     * braucht dadurch an dieser Datei keine Zeile.
+     */
+    socket.onAny(async (ereignis: string, nutzlast: unknown) => {
+      if (ereignis === 'partie:betreten') return;
+
       const code = socket.data.code;
-      if (!code || socket.data.istLeitung) return;
-
-      const geprueft = textSchema.safeParse(nutzlast);
-      if (!geprueft.success) return;
-
-      const live = livePartie(code);
-      liveSpieler(live, socket.data.user.id).text = geprueft.data.text;
-
-      const meldung = { userId: socket.data.user.id, text: geprueft.data.text };
-
-      // Der Text geht einzeln raus statt als ganzer Zustand: er aendert sich
-      // bei jedem Tastendruck, alles andere nicht.
-      io?.to(raumLeitung(code)).emit('spieler:text', meldung);
-
-      const zustand = await zustandBauen(code, false);
-      if (zustand && antwortenOeffentlich(zustand)) {
-        socket.to(raum(code)).emit('spieler:text', meldung);
-      }
-    });
-
-    socket.on('buzzern', async () => {
-      const code = socket.data.code;
-      if (!code || socket.data.istLeitung) return;
-
-      const live = livePartie(code);
-      if (!live.rundeLaeuft || live.rundeGestartetUm === null) return;
-
-      const spieler = liveSpieler(live, socket.data.user.id);
-
-      const zustand = await zustandBauen(code, false);
-      const nurEinmal = zustand?.einstellungen['nurEinmalBuzzern'] !== false;
-      if (spieler.gebuzzertUm !== null && nurEinmal) return;
-
-      spieler.gebuzzertUm = Date.now() - live.rundeGestartetUm;
-      await liveZustandSenden(code);
-    });
-
-    socket.on('runde:starten', async () => {
-      const code = socket.data.code;
-      if (!code || !socket.data.istLeitung) return;
-
-      const live = livePartie(code);
-      live.runde += 1;
-      live.rundeLaeuft = true;
-      live.rundeGestartetUm = Date.now();
-
-      // Neue Frage, leeres Blatt: alte Antworten und Buzzer wegraeumen.
-      for (const spieler of live.spieler.values()) {
-        spieler.text = '';
-        spieler.gebuzzertUm = null;
-      }
-
-      await liveZustandSenden(code);
-    });
-
-    socket.on('runde:stoppen', async () => {
-      const code = socket.data.code;
-      if (!code || !socket.data.istLeitung) return;
-
-      const live = livePartie(code);
-      live.rundeLaeuft = false;
-
-      await liveZustandSenden(code);
-    });
-
-    socket.on('punkte:geben', async (nutzlast: unknown) => {
-      const code = socket.data.code;
-      if (!code || !socket.data.istLeitung) return;
-
-      const geprueft = punkteSchema.safeParse(nutzlast);
-      if (!geprueft.success) return;
+      if (!code) return;
 
       const partie = await prisma.match.findUnique({
         where: { code },
-        select: { id: true, status: true },
-      });
-      if (!partie || partie.status !== 'RUNNING') return;
-
-      // Punkte gehen sofort in die Datenbank: sie sind das Einzige aus der
-      // laufenden Partie, das einen Neustart der API ueberleben muss.
-      //
-      // Lesen und Schreiben statt `increment`: `score` darf leer sein, und in
-      // SQL bleibt NULL + 20 wieder NULL -- die ersten Punkte einer Partie
-      // waeren sonst spurlos verschwunden.
-      const geaendert = await prisma.$transaction(async (tx) => {
-        const eintrag = await tx.matchPlayer.findFirst({
-          where: { matchId: partie.id, userId: geprueft.data.userId, isGamemaster: false },
-          select: { id: true, score: true },
-        });
-        if (!eintrag) return false;
-
-        await tx.matchPlayer.update({
-          where: { id: eintrag.id },
-          data: { score: (eintrag.score ?? 0) + geprueft.data.punkte },
-        });
-
-        return true;
+        select: { game: { select: { slug: true } } },
       });
 
-      if (geaendert) await liveZustandSenden(code);
+      const behandeln = partie && spielart(partie.game.slug)?.ereignisse[ereignis];
+      if (!behandeln) return;
+
+      try {
+        await behandeln(kontext(code, socket), nutzlast);
+      } catch (error) {
+        app.log.error({ err: error, ereignis, code }, 'Spielereignis fehlgeschlagen');
+      }
     });
 
     socket.on('disconnect', async () => {
       const code = socket.data.code;
       if (!code) return;
 
-      const live = partien.get(code);
-      const spieler = live?.spieler.get(socket.data.user.id);
-      if (!live || !spieler) return;
+      const offen = verbindungen.get(code);
+      offen?.delete(socket);
+      if (offen && offen.size === 0) verbindungen.delete(code);
 
-      spieler.verbindungen = Math.max(0, spieler.verbindungen - 1);
+      // Mehrere offene Tabs zaehlen mit: Wer einen schliesst, ist nicht weg.
       await liveZustandSenden(code);
     });
   });

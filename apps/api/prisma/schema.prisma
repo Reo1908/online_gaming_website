@@ -32,6 +32,14 @@ enum MatchResult {
   DRAW
 }
 
+/// Wer eine Lobby finden kann.
+enum MatchVisibility {
+  /// Steht fuer alle Angemeldeten auf der Startseite.
+  PUBLIC
+  /// Nur ueber den Beitrittscode erreichbar.
+  PRIVATE
+}
+
 enum AuditAction {
   USER_CREATED
   USER_UPDATED
@@ -113,6 +121,11 @@ model Match {
   /// Einstellung waere bei der zweiten Spielart schon nicht mehr zu halten.
   settings Json        @default("{}")
 
+  /// Oeffentliche Lobbys stehen auf der Startseite, private nur hinter ihrem
+  /// Code. Gilt fuer jede Spielart, deshalb eine eigene Spalte statt eines
+  /// Eintrags in `settings`: danach wird gesucht und gefiltert.
+  visibility MatchVisibility @default(PRIVATE)
+
   /// Wer die Lobby geoeffnet hat. Optional, damit eine Partie das Loeschen
   /// des Erstellers ueberlebt -- die Historie der Mitspieler bleibt so intakt.
   createdById String?
@@ -123,9 +136,12 @@ model Match {
   createdAt  DateTime  @default(now())
 
   players MatchPlayer[]
+  tags    MatchTag[]
 
   @@index([gameId])
   @@index([status])
+  // Fuer die Liste offener Lobbys auf der Startseite.
+  @@index([status, visibility])
   // Fuer "letzte Partien zuerst" in der Match-History.
   @@index([createdAt])
 }
@@ -148,9 +164,17 @@ model MatchPlayer {
   /// Platzierung ab 1. Bei zwei Spielern redundant, bei mehr nicht.
   placement Int?
 
-  /// Die Spielleitung: vergibt Punkte, startet und beendet die Partie. Sie
-  /// spielt nicht mit und taucht deshalb in keiner Wertung auf.
+  /// Die Spielleitung: startet und beendet die Partie und stellt die Lobby
+  /// ein. Beim Buzzer vergibt sie ausserdem die Punkte.
   isGamemaster Boolean @default(false)
+
+  /// Ob dieser Eintrag mitspielt und gewertet wird.
+  ///
+  /// Zwei Schalter statt einem, weil beides auseinanderfaellt: Beim Buzzer
+  /// stellt die Leitung nur Fragen und darf in keiner Wertung auftauchen, bei
+  /// Scribble zeichnet sie selbst mit. Wer wertet, entscheidet deshalb dieses
+  /// Feld -- nicht `isGamemaster`.
+  isPlaying Boolean @default(true)
 
   joinedAt DateTime @default(now())
 
@@ -210,4 +234,54 @@ model AuditLog {
   /// Verlauf eines Kontos, neueste zuerst.
   @@index([targetId, createdAt])
   @@index([createdAt])
+}
+
+/// Ein Themengebiet, etwa "Pokemon" oder "League of Legends".
+///
+/// Zwei Aufgaben in einem: Die Woerter darin sind der Vorrat, aus dem Scribble
+/// zieht, und in der Lobbyliste sagt das Etikett, worum es in einer Runde geht.
+/// Angelegt werden sie in der Verwaltung -- so kann der Vorrat wachsen, ohne
+/// dass jemand die Anwendung neu ausliefern muss.
+model Tag {
+  id        String   @id @default(uuid())
+  /// Kurzform fuer URLs und fuer die Auswahl in der Lobby.
+  slug      String   @unique
+  name      String
+  /// Farbe des Etiketts als Hex-Wert. Leer heisst: Standardfarbe.
+  color     String?
+  /// Deaktivierte Etiketten verschwinden aus der Auswahl, bleiben aber an
+  /// bereits gespielten Partien haengen.
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  words   TagWord[]
+  matches MatchTag[]
+
+  @@index([isActive])
+}
+
+/// Ein Wort aus dem Vorrat eines Themengebiets.
+model TagWord {
+  id    String @id @default(uuid())
+  tagId String
+  tag   Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  text  String
+
+  /// Dasselbe Wort steht nicht zweimal im selben Gebiet -- sonst zoege
+  /// Scribble es doppelt so haeufig.
+  @@unique([tagId, text])
+  @@index([tagId])
+}
+
+/// Welche Themengebiete fuer eine Partie ausgewaehlt sind.
+model MatchTag {
+  matchId String
+  match   Match  @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  tagId   String
+  /// Restrict: ein Etikett, das an einer Partie haengt, laesst sich nicht
+  /// loeschen -- sonst stuende in der Historie ein Thema ohne Namen.
+  tag     Tag    @relation(fields: [tagId], references: [id], onDelete: Restrict)
+
+  @@id([matchId, tagId])
+  @@index([tagId])
 }

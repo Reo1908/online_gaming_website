@@ -140,13 +140,21 @@ apps/
   api/          Fastify + Prisma
     prisma/     Schema und Migrationen
     src/
-      lib/      Datenbank, Passwörter, Sessions, Guards
-      routes/   health, auth, leaderboard, matches, admin, support
+      lib/      Datenbank, Passwörter, Sessions, Guards, Partien, Sockets
+      games/    Je Spielart ein Ordner: buzzer, scribble
+      routes/   health, auth, leaderboard, matches, tags, admin, support
   web/          Angular 21 + PrimeNG
     src/app/
       core/     Services, Guards, Interceptor, Typen
-      pages/    home, login, leaderboard, profile, admin, status
+      games/    Je Spielart eine Komponente: buzzer, scribble
+      pages/    home, login, partie, leaderboard, profile, admin, status
 ```
+
+Der Schnitt zwischen `lib/` und `games/` ist der wichtigste im Projekt: Was
+für jede Partie gleich ist -- Lobby, Beitritt, Punkte, Wertung, Sockets --
+steht in `lib/`. Was ein Buzzer oder ein Pinselstrich ist, steht in `games/`.
+`lib/realtime.ts` kennt kein einziges Spiel; es reicht Ereignisse an das Modul
+der Spielart durch.
 
 ### Datenmodell
 
@@ -155,8 +163,11 @@ apps/
 | `User` | Konto mit Rolle (`ADMIN` / `PLAYER`), Status und Sichtbarkeit |
 | `Session` | Serverseitige Anmeldung, speichert nur den Token-Hash |
 | `Game` | Eine Spielart, z. B. „Vier gewinnt" — nicht eine einzelne Partie |
-| `Match` | Eine konkrete Partie: `LOBBY` → `RUNNING` → `FINISHED` / `ABORTED`, mit Beitrittscode und Einstellungen |
+| `Match` | Eine konkrete Partie: `LOBBY` → `RUNNING` → `FINISHED` / `ABORTED`, mit Beitrittscode, Sichtbarkeit und Einstellungen |
 | `MatchPlayer` | Teilnahme eines Benutzers an einer Partie, mit Ergebnis; eine davon ist die Spielleitung |
+| `Tag` | Ein Themengebiet wie „Pokémon" — Wortvorrat für Scribble und Etikett an der Lobby |
+| `TagWord` | Ein Wort aus dem Vorrat eines Themengebiets |
+| `MatchTag` | Welche Themengebiete für eine Partie gewählt sind |
 | `OverallStat` | Bilanz über alle Spiele hinweg, Grundlage der Rangliste |
 | `AuditLog` | Wer hat wann an welchem Konto was geändert — und warum |
 
@@ -172,6 +183,16 @@ Drei Entscheidungen, die beim Weiterbauen wichtig sind:
 - **Aktiv und sichtbar sind zwei Schalter.** `isActive` entscheidet über die
   Anmeldung, `isVisible` allein über die Rangliste. Ein Test- oder
   Verwaltungskonto kann so mitspielen, ohne in der Wertung aufzutauchen.
+- **Leiten und mitspielen sind zwei Schalter.** `MatchPlayer.isGamemaster`
+  sagt, wer die Partie startet und einstellt; `isPlaying`, wer gewertet wird.
+  Beim Buzzer stellt die Leitung nur Fragen und taucht in keiner Wertung auf,
+  bei Scribble zeichnet sie mit. Die Wertung hängt deshalb an `isPlaying` --
+  nie an `isGamemaster`.
+- **Themen gehören der Verwaltung, Spielarten dem Quelltext.** `Game` wird bei
+  jedem Start aus `src/games/` abgeglichen. `Tag` dagegen wird nur ein einziges
+  Mal befüllt, auf einem Server ohne ein einziges Thema — sonst käme ein
+  gelöschtes Thema nach jedem Neustart zurück und eine geänderte Wortliste
+  wäre weg.
 
 Noch nicht angelegt: `GameStat` (Bilanz je Spiel).
 
@@ -190,9 +211,12 @@ ohne diese Kopien wäre danach nicht mehr erkennbar, um wen es ging.
 | GET | `/api/auth/session` | offen |
 | GET | `/api/leaderboard` | angemeldet |
 | GET | `/api/games` | angemeldet |
+| GET | `/api/tags` | angemeldet |
 | GET | `/api/matches` | angemeldet |
+| GET | `/api/matches/oeffentlich` | angemeldet |
 | POST | `/api/matches` | angemeldet |
 | GET | `/api/matches/:code` | angemeldet |
+| PATCH | `/api/matches/:code` | Spielleitung |
 | POST | `/api/matches/:code/join` | angemeldet |
 | POST | `/api/matches/:code/leave` | angemeldet |
 | POST | `/api/matches/:code/start` | Spielleitung |
@@ -206,44 +230,118 @@ ohne diese Kopien wäre danach nicht mehr erkennbar, um wen es ging.
 | POST | `/api/admin/users` | Administrator |
 | PATCH | `/api/admin/users/:id` | Administrator |
 | DELETE | `/api/admin/users/:id` | Administrator |
+| GET | `/api/admin/tags` | Administrator |
+| POST | `/api/admin/tags` | Administrator |
+| PATCH | `/api/admin/tags/:id` | Administrator |
+| DELETE | `/api/admin/tags/:id` | Administrator |
 
 ---
 
 ## Wie eine Partie ablaeuft
 
 Wer eine Lobby oeffnet, leitet sie: Die Spielleitung waehlt das Spiel, vergibt
-einen Namen und stellt ein, wie viele Punkte ein Treffer bringt. Die Lobby zeigt
-einen sechsstelligen Code, mit dem die anderen beitreten, solange sie wartet.
+einen Namen und stellt ein, was das Spiel hergibt. Die Lobby zeigt einen
+sechsstelligen Code, mit dem die anderen beitreten, solange sie wartet.
 
-Beim Buzzer-Spiel gibt die Leitung eine Runde frei, alle anderen tippen ihre
-Antwort und buzzern. Wer zuerst drueckt, steht oben — mit der Zeit seit der
-Freigabe. Punkte vergibt allein die Leitung. Am Ende schreibt `finish` die
-Ergebnisse fest und zaehlt die Bilanzen hoch; `abort` beendet ohne Wertung.
+Zwei Einstellungen gelten fuer jede Spielart:
 
-Die Spielleitung spielt nicht mit und taucht in keiner Wertung auf. Gewertet
-wird ab zwei Mitspielenden — sonst gewaenne ein einzelner Spieler jede Partie
-gegen sich selbst.
+- **Privat oder oeffentlich.** Privat ist die Vorgabe: Nur wer den Code hat,
+  kommt herein. Eine oeffentliche Lobby steht dagegen fuer alle Angemeldeten
+  auf der Startseite. Umstellen laesst sich das, solange die Lobby wartet.
+- **Themen.** Etiketten wie „Pokemon" oder „League of Legends" sagen, worum es
+  in der Runde geht — und liefern bei Scribble die Woerter, aus denen gezogen
+  wird. Mehrere sind erlaubt; ohne Auswahl zaehlen alle. Angelegt werden sie
+  von einem Administrator unter `/admin` im Reiter „Themen".
+
+Gewertet wird ab zwei Mitspielenden — sonst gewaenne ein einzelner Spieler jede
+Partie gegen sich selbst.
+
+### Buzzer
+
+Die Leitung gibt eine Runde frei, alle anderen tippen ihre Antwort und
+buzzern. Wer zuerst drueckt, steht oben — mit der Zeit seit der Freigabe.
+Punkte vergibt allein die Leitung; sie spielt selbst nicht mit und taucht in
+keiner Wertung auf. Am Ende schreibt `finish` die Ergebnisse fest und zaehlt
+die Bilanzen hoch, `abort` beendet ohne Wertung.
+
+Die Antworten sieht standardmaessig nur die Leitung — die Mitspieler bekommen
+den Text der anderen gar nicht erst geschickt, statt ihn nur auszublenden.
+
+### Scribble
+
+Einer zeichnet, die anderen raten. Anders als beim Buzzer spielt die Leitung
+mit: Jeder kommt je Runde einmal ans Zeichenbrett.
+
+Ein Zug laeuft in vier Phasen: Der Zeichner bekommt drei Woerter zur Auswahl
+(nach fuenfzehn Sekunden gilt das erste), zeichnet, und der Zug endet, sobald
+die Zeit um ist oder alle das Wort haben. Danach steht die Aufloesung sechs
+Sekunden lang da. Nach der letzten Runde endet die Partie von selbst und
+schreibt die Wertung fest — niemand muss sie abpfeifen.
+
+Das Punktesystem ist an scribble.io angelehnt, aber bewusst schlichter:
+
+| | Punkte |
+|---|---|
+| Erster, der errät | die volle Basis (Vorgabe 100) |
+| Jeder weitere | 20 % weniger, mindestens 40 % der Basis |
+| Zeichner | ein Viertel der Basis je Treffer, hoechstens die volle Basis |
+
+Dort haengt die Punktzahl auf die Sekunde genau an der Restzeit — das rechnet
+niemand im Kopf nach. Hier zaehlt allein die Reihenfolge, und die kann jeder
+am Tisch mitzaehlen. Der Deckel beim Zeichner ist kein Detail: Ohne ihn lohnte
+es sich, in einer grossen Runde ein besonders leichtes Wort zu nehmen.
+
+Geraten wird in einen Chat. Verglichen wird ohne Ruecksicht auf Gross- und
+Kleinschreibung, Umlaute und Bindestriche — „PIKACHU" und „pikachu" sind
+dasselbe Wort. Wer getroffen hat, darf weiterreden, aber nur noch mit denen,
+die das Wort ebenfalls haben: Sonst tippt der Zeichner die Loesung in den Raum.
+In der zweiten Haelfte eines Zuges fallen nach und nach einzelne Buchstaben,
+hoechstens die Haelfte des Wortes.
 
 ### Der Live-Teil
 
-Getippter Text, Buzzer und Punktestand laufen ueber Socket.IO unter
-`/api/socket.io` — derselbe Pfad wie die REST-Aufrufe, damit nginx im Betrieb
-und der Angular-Proxy in der Entwicklung ohne eine zweite Weiterleitung
-auskommen. Angemeldet wird der Socket ueber dasselbe Session-Cookie.
+Alles Laufende geht ueber Socket.IO unter `/api/socket.io` — derselbe Pfad wie
+die REST-Aufrufe, damit nginx im Betrieb und der Angular-Proxy in der
+Entwicklung ohne eine zweite Weiterleitung auskommen. Angemeldet wird der
+Socket ueber dasselbe Session-Cookie.
+
+Der Zustand geht **je Socket einzeln** raus, nicht an einen Raum: Beim Scribble
+sieht der Zeichner sein Wort, wer schon getroffen hat ebenfalls, alle anderen
+nur die Luecken. Was jemand nicht sehen darf, liegt gar nicht erst auf dem
+Draht — ausblenden im Browser waere keine Sperre, sondern ein Vorhang.
+
+Was sich dutzendfach je Sekunde aendert, geht als kleines Stueck fuer sich:
+ein Pinselstrich, ein getippter Text, eine Chatzeile. Der volle Zustand — mit
+der ganzen Zeichnung darin — nur bei einem Phasenwechsel oder einem Beitritt.
 
 Was waehrend einer Runde entsteht, bleibt im Arbeitsspeicher der API: bei jedem
 Tastendruck in die Datenbank zu schreiben waere teuer und ohne Nutzen. Punkte,
 Teilnehmer und Status stehen dagegen sofort in der Datenbank. Ein Neustart der
 API kostet also die laufende Runde, nicht den Spielstand.
 
-Die Antworten sieht standardmaessig nur die Spielleitung. Dafuer sitzen Leitung
-und Mitspieler in getrennten Socket-Raeumen — die Mitspieler bekommen den Text
-der anderen gar nicht erst geschickt, statt ihn nur auszublenden.
+### Ein neues Spiel dazubauen
 
-Ein neues Spiel kommt in `apps/api/src/lib/spiele.ts` dazu: Eintrag in
-`SPIELARTEN` mit einem Zod-Schema fuer seine Einstellungen. Die Tabelle `Game`
-wird daraus beim Start abgeglichen, das Formular im Frontend nimmt die
-Standardwerte von dort.
+Ein Spiel ist ein Ordner unter `apps/api/src/games/` und ein Eintrag in der
+Liste `SPIELE` in `games/index.ts`. Das Modul bringt mit:
+
+- ein **Zod-Schema** fuer seine Einstellungen, in dem jedes Feld einen
+  Standardwert hat — daraus baut das Frontend sein Formular, und deshalb
+  stehen die Vorgaben nur an dieser einen Stelle;
+- **`sicht()`** und optional **`spielerSicht()`**: der Teil des Live-Zustands,
+  den das Spiel beisteuert. Beide werden je Zuschauer gerufen, damit sich
+  Geheimnisse gezielt zurueckhalten lassen;
+- **`ereignisse`**: was es aus dem Browser annimmt. `lib/realtime.ts` reicht
+  alles durch, was es nicht selbst kennt — dort ist keine Zeile zu aendern;
+- **`leitungSpieltMit`** und **`minZumStart`**: ob die Leitung gewertet wird
+  und ab wie vielen Mitspielenden es losgeht.
+
+Kommt das Spiel von selbst ans Ende, ruft es `ctx.beenden()`; laeuft es bis
+zum Abpfiff, tut es nichts und die Leitung drueckt auf „Partie beenden".
+
+Im Browser kommt eine Komponente unter `apps/web/src/app/games/` dazu, ein
+Eintrag in `games/registry.ts` (welche Einstellungsfelder es gibt und ob die
+Partie von Hand endet) und ein Zweig im `@switch` in `pages/partie/partie.html`.
+Die Tabelle `Game` gleicht sich beim Start von selbst ab.
 
 ---
 

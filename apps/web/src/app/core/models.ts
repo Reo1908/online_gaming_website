@@ -129,13 +129,42 @@ export interface SpielArt {
   minPlayers: number;
   maxPlayers: number;
   standardEinstellungen: Record<string, unknown>;
+  /** Ob die Spielart Woerter aus den Themen zieht -- Scribble ja, Buzzer nein. */
+  brauchtThemen: boolean;
 }
 
-/** Einstellungen des Buzzer-Spiels. */
-export interface BuzzerEinstellungen {
-  punkteProTreffer: number;
-  nurEinmalBuzzern: boolean;
-  antwortenOeffentlich: boolean;
+/** Ein Themengebiet, wie es die Lobby zur Auswahl bekommt. */
+export interface Thema {
+  slug: string;
+  name: string;
+  farbe: string | null;
+  /** Wie viele Woerter darin stehen. */
+  woerter: number;
+}
+
+/** Dasselbe Thema in der Verwaltung -- dort steht die Wortliste selbst drin. */
+export interface AdminThema {
+  id: string;
+  slug: string;
+  name: string;
+  farbe: string | null;
+  isActive: boolean;
+  createdAt: string;
+  woerter: string[];
+}
+
+export interface ThemaEingabe {
+  name?: string;
+  color?: string | null;
+  isActive?: boolean;
+  woerter?: string[];
+}
+
+/** Ein Etikett an einer Partie. */
+export interface Etikett {
+  slug: string;
+  name: string;
+  farbe: string | null;
 }
 
 export interface Teilnehmer {
@@ -143,6 +172,8 @@ export interface Teilnehmer {
   displayName: string;
   username: string;
   istLeitung: boolean;
+  /** Ob der Eintrag gewertet wird; die Buzzer-Spielleitung etwa nicht. */
+  spieltMit: boolean;
   punkte: number;
   ergebnis: MatchResult | null;
   platz: number | null;
@@ -155,7 +186,10 @@ export interface Partie {
   name: string;
   status: MatchStatus;
   settings: Record<string, unknown>;
+  /** Oeffentliche Lobbys stehen fuer alle auf der Startseite. */
+  oeffentlich: boolean;
   spiel: { slug: string; name: string; minPlayers: number; maxPlayers: number };
+  etiketten: Etikett[];
   createdAt: string;
   startedAt: string | null;
   finishedAt: string | null;
@@ -163,20 +197,33 @@ export interface Partie {
 }
 
 /**
- * Ein Teilnehmer im Live-Zustand. `text` fehlt, wenn die Partie die Antworten
- * nicht oeffentlich zeigt -- die Mitspieler bekommen ihn dann gar nicht erst.
+ * Ein Teilnehmer im Live-Zustand.
+ *
+ * Die Felder ab `gebuzzertUm` steuert die jeweilige Spielart bei -- beim
+ * Buzzer der Platz am Buzzer, bei Scribble, wer gerade zeichnet. Sie fehlen
+ * deshalb, sobald das andere Spiel laeuft.
  */
 export interface LiveTeilnehmer {
   userId: string;
   displayName: string;
   istLeitung: boolean;
+  spieltMit: boolean;
   punkte: number;
   verbunden: boolean;
-  /** Millisekunden seit Rundenstart. */
-  gebuzzertUm: number | null;
-  /** Rang am Buzzer, 1 fuer den Ersten. */
-  buzzerPlatz: number | null;
+
+  /** Buzzer: Millisekunden seit Rundenstart. */
+  gebuzzertUm?: number | null;
+  /** Buzzer: Rang am Buzzer, 1 fuer den Ersten. */
+  buzzerPlatz?: number | null;
+  /** Buzzer: fehlt, wenn die Partie die Antworten nicht oeffentlich zeigt. */
   text?: string;
+
+  /** Scribble: ob diese Person gerade zeichnet. */
+  zeichnet?: boolean;
+  /** Scribble: ob sie das Wort in diesem Zug schon hat. */
+  hatGeraten?: boolean;
+  /** Scribble: was sie im abgelaufenen Zug bekommen hat. */
+  zugPunkte?: number | null;
 }
 
 /** Der Live-Zustand einer Partie, wie ihn die Socket-Verbindung schickt. */
@@ -184,14 +231,26 @@ export interface LiveZustand {
   code: string;
   name: string;
   status: MatchStatus;
+  oeffentlich: boolean;
   spiel: { slug: string; name: string };
   einstellungen: Record<string, unknown>;
-  runde: { nummer: number; laeuft: boolean; gestartetUm: number | null };
+  etiketten: Etikett[];
   teilnehmer: LiveTeilnehmer[];
+  /** Alles Spielabhaengige -- je nach Spielart anders geformt. */
+  spielZustand: unknown;
 }
 
 export interface PartieAnlegen {
   gameSlug: string;
   name: string;
+  oeffentlich: boolean;
+  etiketten: string[];
   settings: Record<string, unknown>;
+}
+
+/** Was sich an einer wartenden Lobby noch aendern laesst. */
+export interface PartieAendern {
+  name?: string;
+  oeffentlich?: boolean;
+  etiketten?: string[];
 }

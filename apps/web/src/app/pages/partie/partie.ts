@@ -7,21 +7,29 @@ import { MessageModule } from 'primeng/message';
 import { ApiService } from '../../core/api.service';
 import { AuthService } from '../../core/auth.service';
 import { RealtimeService } from '../../core/realtime.service';
-import type { LiveTeilnehmer, MatchStatus, Partie as PartieModel } from '../../core/models';
+import { Buzzer } from '../../games/buzzer/buzzer';
+import { Scribble } from '../../games/scribble/scribble';
+import { einstellungenLesbar, spielDefinition } from '../../games/registry';
+import type {
+  Etikett,
+  LiveTeilnehmer,
+  MatchStatus,
+  Partie as PartieModel,
+  Thema,
+} from '../../core/models';
 
-/** Standardwerte, falls eine Partie noch aus einer aelteren Fassung stammt. */
-const PUNKTE_STANDARD = 10;
-
+/**
+ * Der Rahmen um eine Partie.
+ *
+ * Alles, was fuer jede Spielart gleich ist, steht hier: laden, beitreten, die
+ * wartende Lobby, der Endstand. Sobald es losgeht, uebernimmt die Komponente
+ * der Spielart -- was dort passiert, weiss diese Datei nicht.
+ */
 @Component({
   selector: 'app-partie',
-  imports: [ButtonModule, MessageModule],
+  imports: [ButtonModule, MessageModule, Buzzer, Scribble],
   templateUrl: './partie.html',
   styleUrl: './partie.scss',
-  host: {
-    // Leertaste buzzert -- beim Buzzer-Spiel zaehlen Zehntelsekunden, und der
-    // Weg zur Maus kostet mehr als das. Im Textfeld bleibt sie ein Leerzeichen.
-    '(document:keydown)': 'taste($event)',
-  },
 })
 export class Partie implements OnDestroy {
   private readonly api = inject(ApiService);
@@ -33,12 +41,12 @@ export class Partie implements OnDestroy {
   readonly code = input.required<string>();
 
   protected readonly partie = signal<PartieModel | null>(null);
+  protected readonly themen = signal<Thema[]>([]);
   protected readonly laedt = signal(true);
   protected readonly busy = signal(false);
   protected readonly fehler = signal<string | null>(null);
   protected readonly hinweis = signal<string | null>(null);
   protected readonly codeKopiert = signal(false);
-  protected readonly eigenerText = signal('');
 
   protected readonly zustand = this.realtime.zustand;
   protected readonly verbunden = this.realtime.verbunden;
@@ -48,6 +56,21 @@ export class Partie implements OnDestroy {
     effect(() => {
       const code = this.code();
       void this.laden(code);
+    });
+
+    /*
+     * Scribble endet von selbst -- die Nachricht kommt ueber die
+     * Socket-Verbindung. Die festgeschriebenen Plaetze stehen dann aber nur
+     * in der Datenbank, nicht im Live-Zustand: also einmal nachladen.
+     */
+    effect(() => {
+      const live = this.zustand();
+      const geladen = this.partie();
+      if (!live || !geladen) return;
+      if (live.status === geladen.status) return;
+      if (live.status !== 'FINISHED' && live.status !== 'ABORTED') return;
+
+      void this.nachladen();
     });
   }
 
@@ -59,6 +82,10 @@ export class Partie implements OnDestroy {
 
   protected readonly status = computed<MatchStatus>(
     () => this.zustand()?.status ?? this.partie()?.status ?? 'LOBBY',
+  );
+
+  protected readonly spielSlug = computed(
+    () => this.zustand()?.spiel.slug ?? this.partie()?.spiel.slug ?? '',
   );
 
   /**
@@ -73,33 +100,49 @@ export class Partie implements OnDestroy {
       userId: t.userId,
       displayName: t.displayName,
       istLeitung: t.istLeitung,
+      spieltMit: t.spieltMit,
       punkte: t.punkte,
       verbunden: false,
-      gebuzzertUm: null,
-      buzzerPlatz: null,
     }));
   });
 
+  protected readonly ichId = computed(() => this.auth.user()?.id ?? '');
   protected readonly ich = computed(() =>
-    this.teilnehmer().find((t) => t.userId === this.auth.user()?.id),
+    this.teilnehmer().find((t) => t.userId === this.ichId()),
   );
 
   protected readonly binLeitung = computed(() => this.ich()?.istLeitung === true);
   protected readonly binDabei = computed(() => this.ich() !== undefined);
 
-  protected readonly spieler = computed(() => this.teilnehmer().filter((t) => !t.istLeitung));
+  /** Wer mitspielt und gewertet wird -- die Buzzer-Leitung also nicht. */
+  protected readonly spieler = computed(() => this.teilnehmer().filter((t) => t.spieltMit));
   protected readonly leitung = computed(() => this.teilnehmer().find((t) => t.istLeitung));
 
-  /** Wer gebuzzert hat, in der Reihenfolge des Drueckens. */
-  protected readonly amBuzzer = computed(() =>
-    this.spieler()
-      .filter((t) => t.buzzerPlatz !== null)
-      .sort((a, b) => (a.buzzerPlatz ?? 0) - (b.buzzerPlatz ?? 0)),
+  protected readonly etiketten = computed<Etikett[]>(
+    () => this.zustand()?.etiketten ?? this.partie()?.etiketten ?? [],
   );
 
-  protected readonly rangliste = computed(() =>
-    [...this.spieler()].sort((a, b) => b.punkte - a.punkte),
+  protected readonly oeffentlich = computed(
+    () => this.zustand()?.oeffentlich ?? this.partie()?.oeffentlich ?? false,
   );
+
+  /** Die Einstellungen der Partie, lesbar gemacht -- je Spielart andere. */
+  protected readonly einstellungen = computed(() =>
+    einstellungenLesbar(
+      this.spielSlug(),
+      this.zustand()?.einstellungen ?? this.partie()?.settings ?? {},
+    ),
+  );
+
+  protected readonly manuellesEnde = computed(
+    () => spielDefinition(this.spielSlug())?.manuellesEnde ?? true,
+  );
+
+  /** Wie viele Mitspielende es zum Start braucht. */
+  protected readonly genugSpieler = computed(() => {
+    const noetig = this.spielSlug() === 'scribble' ? 2 : 1;
+    return this.spieler().length >= noetig;
+  });
 
   /**
    * Der Endstand kommt aus der Datenbank, nicht aus dem Live-Zustand: dort
@@ -108,34 +151,12 @@ export class Partie implements OnDestroy {
    */
   protected readonly endstand = computed(() =>
     (this.partie()?.teilnehmer ?? [])
-      .filter((t) => !t.istLeitung)
+      .filter((t) => t.spieltMit)
       .sort((a, b) => (a.platz ?? 99) - (b.platz ?? 99) || b.punkte - a.punkte),
   );
 
-  protected readonly runde = computed(
-    () => this.zustand()?.runde ?? { nummer: 0, laeuft: false, gestartetUm: null },
-  );
-
-  protected readonly einstellungen = computed(() => {
-    const roh = this.zustand()?.einstellungen ?? this.partie()?.settings ?? {};
-    return {
-      punkteProTreffer: Number(roh['punkteProTreffer'] ?? PUNKTE_STANDARD),
-      nurEinmalBuzzern: roh['nurEinmalBuzzern'] !== false,
-      antwortenOeffentlich: roh['antwortenOeffentlich'] === true,
-    };
-  });
-
-  protected readonly darfBuzzern = computed(() => {
-    if (this.binLeitung() || this.status() !== 'RUNNING') return false;
-    if (!this.runde().laeuft) return false;
-
-    const schonGedrueckt = this.ich()?.buzzerPlatz !== null;
-    return !(schonGedrueckt && this.einstellungen().nurEinmalBuzzern);
-  });
-
-  protected sekunden(ms: number | null): string {
-    if (ms === null) return '—';
-    return `${(ms / 1000).toFixed(2).replace('.', ',')} s`;
+  protected istGewaehlt(slug: string): boolean {
+    return this.etiketten().some((e) => e.slug === slug);
   }
 
   // ----- Laden und Beitreten ----------------------------------------------
@@ -148,12 +169,33 @@ export class Partie implements OnDestroy {
       const partie = await firstValueFrom(this.api.partie(code));
       this.partie.set(partie);
 
-      const dabei = partie.teilnehmer.some((t) => t.userId === this.auth.user()?.id);
+      const dabei = partie.teilnehmer.some((t) => t.userId === this.ichId());
       if (dabei) this.realtime.betreten(code);
+
+      // Die Themen braucht nur die Leitung einer wartenden Lobby -- deshalb
+      // erst dann und nicht bei jedem Aufruf.
+      if (dabei && partie.status === 'LOBBY') void this.themenLaden();
     } catch (err) {
       this.fehler.set(this.meldung(err, 'Diese Partie konnte nicht geladen werden.'));
     } finally {
       this.laedt.set(false);
+    }
+  }
+
+  private async nachladen(): Promise<void> {
+    try {
+      this.partie.set(await firstValueFrom(this.api.partie(this.code())));
+    } catch {
+      // Der Live-Zustand hat den Endstand schon gezeigt; ein Fehler beim
+      // Nachladen darf die Seite nicht mit einer Meldung zupflastern.
+    }
+  }
+
+  private async themenLaden(): Promise<void> {
+    try {
+      this.themen.set(await firstValueFrom(this.api.themen()));
+    } catch {
+      // Ohne Themen laesst sich trotzdem spielen -- dann zaehlt einfach alles.
     }
   }
 
@@ -180,6 +222,38 @@ export class Partie implements OnDestroy {
     } catch {
       // Zwischenablage gesperrt: der Code steht gross auf dem Schirm und
       // laesst sich vorlesen oder markieren.
+    }
+  }
+
+  /** Schaltet ein Thema an oder ab. Nur die Leitung sieht die Knoepfe. */
+  protected async themaUmschalten(slug: string): Promise<void> {
+    const vorher = this.etiketten().map((e) => e.slug);
+    const nachher = vorher.includes(slug)
+      ? vorher.filter((s) => s !== slug)
+      : [...vorher, slug];
+
+    await this.einstellen({ etiketten: nachher });
+  }
+
+  protected async sichtbarkeitUmschalten(): Promise<void> {
+    await this.einstellen({ oeffentlich: !this.oeffentlich() });
+  }
+
+  private async einstellen(aenderung: {
+    oeffentlich?: boolean;
+    etiketten?: string[];
+  }): Promise<void> {
+    if (this.busy()) return;
+
+    this.busy.set(true);
+    this.fehler.set(null);
+
+    try {
+      this.partie.set(await firstValueFrom(this.api.partieAendern(this.code(), aenderung)));
+    } catch (err) {
+      this.fehler.set(this.meldung(err, 'Die Einstellung konnte nicht gespeichert werden.'));
+    } finally {
+      this.busy.set(false);
     }
   }
 
@@ -241,42 +315,6 @@ export class Partie implements OnDestroy {
     } finally {
       this.busy.set(false);
     }
-  }
-
-  // ----- Im Spiel ----------------------------------------------------------
-
-  protected textTippen(wert: string): void {
-    this.eigenerText.set(wert);
-    this.realtime.textSenden(wert);
-  }
-
-  protected buzzern(): void {
-    if (!this.darfBuzzern()) return;
-    this.realtime.buzzern();
-  }
-
-  protected taste(event: KeyboardEvent): void {
-    if (event.code !== 'Space' && event.key !== ' ') return;
-
-    // Im Textfeld ist die Leertaste ein Leerzeichen und sonst nichts.
-    const ziel = event.target as HTMLElement | null;
-    if (ziel && (ziel.tagName === 'INPUT' || ziel.tagName === 'TEXTAREA')) return;
-    if (!this.darfBuzzern()) return;
-
-    event.preventDefault();
-    this.buzzern();
-  }
-
-  protected rundeStarten(): void {
-    this.realtime.rundeStarten();
-  }
-
-  protected rundeStoppen(): void {
-    this.realtime.rundeStoppen();
-  }
-
-  protected punkte(userId: string, faktor: 1 | -1): void {
-    this.realtime.punkteGeben(userId, this.einstellungen().punkteProTreffer * faktor);
   }
 
   private meldung(err: unknown, ersatz: string): string {
