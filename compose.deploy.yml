@@ -113,6 +113,14 @@ services:
     restart: unless-stopped
     logging: *logging
 
+    # Caddy liest die Domain nicht von hier -- sie steht schon in der
+    # Konfiguration oben. Der Eintrag sorgt dafuer, dass `up -d` den Container
+    # nach einem Domainwechsel ueberhaupt neu aufsetzt: eine geaenderte
+    # configs-Vorlage allein merkt Compose nicht, und Caddy liefe still mit
+    # der alten Domain weiter.
+    environment:
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN}
+
     ports:
       - '80:80'
       - '443:443'
