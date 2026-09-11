@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import {
   AbstractControl,
@@ -9,9 +9,14 @@ import {
 } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
+import { AvatarModule } from 'primeng/avatar';
 import { ButtonModule } from 'primeng/button';
+import { CardModule } from 'primeng/card';
+import { DialogModule } from 'primeng/dialog';
 import { InputTextModule } from 'primeng/inputtext';
 import { MessageModule } from 'primeng/message';
+import { PasswordModule } from 'primeng/password';
+import { TagModule } from 'primeng/tag';
 import { ApiService } from '../../core/api.service';
 import { AuthService } from '../../core/auth.service';
 
@@ -24,7 +29,18 @@ function passwoerterGleich(group: AbstractControl): ValidationErrors | null {
 
 @Component({
   selector: 'app-profile',
-  imports: [RouterLink, ReactiveFormsModule, ButtonModule, InputTextModule, MessageModule],
+  imports: [
+    RouterLink,
+    ReactiveFormsModule,
+    AvatarModule,
+    ButtonModule,
+    CardModule,
+    DialogModule,
+    InputTextModule,
+    MessageModule,
+    PasswordModule,
+    TagModule,
+  ],
   templateUrl: './profile.html',
   styleUrl: './profile.scss',
 })
@@ -33,9 +49,24 @@ export class Profile {
   private readonly api = inject(ApiService);
   protected readonly auth = inject(AuthService);
 
+  protected readonly dialogOffen = signal(false);
   protected readonly busy = signal(false);
-  protected readonly error = signal<string | null>(null);
+  protected readonly dialogFehler = signal<string | null>(null);
   protected readonly notice = signal<string | null>(null);
+  protected readonly idKopiert = signal(false);
+
+  /** Bis zu zwei Anfangsbuchstaben fuer den Avatar, z. B. "Max Mustermann" -> "MM". */
+  protected readonly initialen = computed(() => {
+    const name = this.auth.user()?.displayName ?? '';
+    return (
+      name
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((teil) => teil[0]?.toUpperCase() ?? '')
+        .join('') || '?'
+    );
+  });
 
   protected readonly form = this.fb.nonNullable.group(
     {
@@ -47,6 +78,24 @@ export class Profile {
     { validators: passwoerterGleich },
   );
 
+  protected dialogOeffnen(): void {
+    this.form.reset();
+    this.dialogFehler.set(null);
+    this.notice.set(null);
+    this.dialogOffen.set(true);
+  }
+
+  protected async kopiereId(id: string): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(id);
+      this.idKopiert.set(true);
+      setTimeout(() => this.idKopiert.set(false), 2000);
+    } catch {
+      // Zwischenablage kann gesperrt sein (fehlende Berechtigung, kein
+      // sicherer Kontext). Kein Grund, die Seite mit einem Fehler zu behelligen.
+    }
+  }
+
   protected async submit(): Promise<void> {
     if (this.form.invalid || this.busy()) {
       this.form.markAllAsTouched();
@@ -54,8 +103,7 @@ export class Profile {
     }
 
     this.busy.set(true);
-    this.error.set(null);
-    this.notice.set(null);
+    this.dialogFehler.set(null);
 
     const { currentPassword, newPassword } = this.form.getRawValue();
 
@@ -71,9 +119,11 @@ export class Profile {
             } beendet.`
           : 'Passwort geändert.',
       );
+      this.dialogOffen.set(false);
       this.form.reset();
     } catch (err) {
-      this.error.set(this.messageFor(err));
+      // Fehler bleibt im Dialog stehen, damit die Eingaben nicht verloren gehen.
+      this.dialogFehler.set(this.messageFor(err));
     } finally {
       this.busy.set(false);
     }

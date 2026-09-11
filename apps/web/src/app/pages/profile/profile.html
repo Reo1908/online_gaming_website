@@ -1,91 +1,153 @@
 @if (auth.user(); as user) {
   <h1>Profil</h1>
 
-  <section class="panel">
-    <h2>Konto</h2>
+  @if (notice(); as message) {
+    <p-message severity="success" [text]="message" styleClass="voll" />
+  }
 
-    <dl class="details">
-      <dt>Anzeigename</dt>
-      <dd>{{ user.displayName }}</dd>
+  <!-- Kopfkarte: wer bin ich -->
+  <p-card styleClass="karte kopfkarte">
+    <div class="identitaet">
+      <p-avatar [label]="initialen()" size="xlarge" shape="circle" styleClass="avatar" />
 
-      <dt>Benutzername</dt>
-      <dd>{{ user.username }}</dd>
+      <div class="namen">
+        <h2>{{ user.displayName }}</h2>
+        <p class="handle">{{ user.username }}</p>
+        <p-tag
+          [severity]="user.role === 'ADMIN' ? 'success' : 'secondary'"
+          [value]="user.role === 'ADMIN' ? 'Administrator' : 'Spieler'"
+          styleClass="rolle"
+        />
+      </div>
+    </div>
 
-      <dt>Rolle</dt>
-      <dd>{{ user.role === 'ADMIN' ? 'Administrator' : 'Spieler' }}</dd>
+    <div class="id-zeile">
+      <span class="id-label">Benutzer-ID</span>
+      <code>{{ user.id }}</code>
+      <p-button
+        [icon]="idKopiert() ? 'pi pi-check' : 'pi pi-copy'"
+        [severity]="idKopiert() ? 'success' : 'secondary'"
+        [text]="true"
+        size="small"
+        [ariaLabel]="'Benutzer-ID kopieren'"
+        (onClick)="kopiereId(user.id)"
+      />
+    </div>
+  </p-card>
 
-      <dt>Benutzer-ID</dt>
-      <dd class="mono">{{ user.id }}</dd>
-    </dl>
+  <!-- Sicherheit: Passwort liegt hinter einem Knopf, nicht offen auf der Seite -->
+  <p-card styleClass="karte">
+    <div class="abschnitt">
+      <div class="abschnitt-text">
+        <h3><i class="pi pi-lock"></i> Passwort</h3>
+        <p>
+          Mit Argon2id gespeichert, niemals im Klartext. Nach einer Änderung bleibst du hier
+          angemeldet, alle anderen Geräte werden abgemeldet.
+        </p>
+      </div>
 
-    @if (user.role === 'ADMIN') {
-      <p class="admin-hint">
-        Du hast Administratorrechte — <a routerLink="/admin">Benutzer verwalten</a>.
-      </p>
-    }
-  </section>
+      <p-button
+        label="Passwort ändern"
+        icon="pi pi-key"
+        severity="secondary"
+        [outlined]="true"
+        (onClick)="dialogOeffnen()"
+      />
+    </div>
+  </p-card>
 
-  <section class="panel">
-    <h2>Passwort ändern</h2>
+  @if (user.role === 'ADMIN') {
+    <p-card styleClass="karte">
+      <div class="abschnitt">
+        <div class="abschnitt-text">
+          <h3><i class="pi pi-shield"></i> Administration</h3>
+          <p>Benutzer verwalten und den Zustand des Systems einsehen.</p>
+        </div>
 
-    <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
-      @if (error(); as message) {
-        <p-message severity="error" [text]="message" styleClass="full" />
+        <div class="knopf-gruppe">
+          <p-button
+            label="Benutzer"
+            icon="pi pi-users"
+            severity="secondary"
+            [outlined]="true"
+            routerLink="/admin"
+          />
+          <p-button
+            label="Status"
+            icon="pi pi-chart-line"
+            severity="secondary"
+            [outlined]="true"
+            routerLink="/status"
+          />
+        </div>
+      </div>
+    </p-card>
+  }
+
+  <p-dialog
+    [visible]="dialogOffen()"
+    (visibleChange)="$event || dialogOffen.set(false)"
+    [modal]="true"
+    [draggable]="false"
+    [style]="{ width: '26rem' }"
+    header="Passwort ändern"
+  >
+    <form [formGroup]="form" (ngSubmit)="submit()" novalidate class="dialog-form">
+      @if (dialogFehler(); as message) {
+        <p-message severity="error" [text]="message" styleClass="voll" />
       }
-      @if (notice(); as message) {
-        <p-message severity="success" [text]="message" styleClass="full" />
-      }
 
-      <div class="field">
+      <div class="feld">
         <label for="currentPassword">Aktuelles Passwort</label>
-        <input
-          pInputText
-          id="currentPassword"
-          type="password"
+        <p-password
+          inputId="currentPassword"
           formControlName="currentPassword"
+          [feedback]="false"
+          [toggleMask]="true"
+          [fluid]="true"
           autocomplete="current-password"
         />
       </div>
 
-      <div class="field">
+      <div class="feld">
         <label for="newPassword">Neues Passwort</label>
-        <input
-          pInputText
-          id="newPassword"
-          type="password"
+        <p-password
+          inputId="newPassword"
           formControlName="newPassword"
+          [feedback]="false"
+          [toggleMask]="true"
+          [fluid]="true"
           autocomplete="new-password"
         />
         <small>Mindestens 12 Zeichen</small>
       </div>
 
-      <div class="field">
-        <label for="confirmPassword">Neues Passwort wiederholen</label>
-        <input
-          pInputText
-          id="confirmPassword"
-          type="password"
+      <div class="feld">
+        <label for="confirmPassword">Wiederholen</label>
+        <p-password
+          inputId="confirmPassword"
           formControlName="confirmPassword"
+          [feedback]="false"
+          [toggleMask]="true"
+          [fluid]="true"
           autocomplete="new-password"
         />
-        <!-- Erst melden, wenn beide Felder angefasst wurden: sonst steht die
+        <!-- Erst melden, wenn das Feld angefasst wurde: sonst stuende die
              Warnung schon beim ersten Tastendruck da. -->
         @if (form.hasError('stimmenNichtUeberein') && form.controls.confirmPassword.touched) {
           <small class="warn">Die beiden Eingaben stimmen nicht überein</small>
         }
       </div>
 
-      <p class="hinweis">
-        Nach der Änderung bleibst du hier angemeldet. Auf allen anderen Geräten wirst du
-        abgemeldet.
-      </p>
-
-      <p-button
-        type="submit"
-        label="Passwort ändern"
-        [loading]="busy()"
-        [disabled]="form.invalid"
-      />
+      <div class="dialog-knoepfe">
+        <p-button
+          label="Abbrechen"
+          severity="secondary"
+          [text]="true"
+          (onClick)="dialogOffen.set(false)"
+        />
+        <p-button type="submit" label="Speichern" [loading]="busy()" [disabled]="form.invalid" />
+      </div>
     </form>
-  </section>
+  </p-dialog>
 }
