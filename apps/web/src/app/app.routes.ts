@@ -4,6 +4,9 @@ import { adminGuard, authGuard, guestGuard } from './core/auth.guard';
 export const routes: Routes = [
   {
     path: '',
+    // Ohne Anmeldung ist ausser /login nichts erreichbar. Der Guard schickt
+    // Unangemeldete dorthin und merkt sich das urspruengliche Ziel.
+    canActivate: [authGuard],
     loadComponent: () => import('./pages/home/home').then((m) => m.Home),
     title: 'Friend Games',
   },

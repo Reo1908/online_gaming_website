@@ -1,10 +1,16 @@
 <header class="topbar">
-  <a class="brand" routerLink="/">Friend<span>Games</span></a>
+  @if (auth.isLoggedIn()) {
+    <a class="brand" routerLink="/">Friend<span>Games</span></a>
+  } @else {
+    <!-- Ohne Anmeldung fuehrt der Verweis nirgendwohin: es gibt nur /login. -->
+    <span class="brand">Friend<span>Games</span></span>
+  }
 
   <nav class="nav">
-    <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Start</a>
-
     @if (auth.isLoggedIn()) {
+      <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">
+        Start
+      </a>
       <a routerLink="/profile" routerLinkActive="active">Profil</a>
     }
 
@@ -22,8 +28,6 @@
         <span class="role" [class.is-admin]="user.role === 'ADMIN'">{{ user.role }}</span>
       </span>
       <p-button label="Abmelden" severity="secondary" size="small" (onClick)="logout()" />
-    } @else {
-      <p-button label="Anmelden" size="small" routerLink="/login" />
     }
   </div>
 </header>
