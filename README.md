@@ -82,14 +82,39 @@ und würden von einer Windows-Version überdeckt und unbrauchbar.
 # Nach einer Änderung an prisma/schema.prisma
 docker compose exec api npx prisma migrate dev --name beschreibender_name
 
-# Daten ansehen
-docker compose exec api npx prisma studio
-
 # Direkt per SQL
 docker compose exec db psql -U friendgames -d friendgames
 ```
 
 Bestehende Migrationen werden bei jedem Containerstart automatisch eingespielt.
+
+### Daten ansehen (Prisma Studio)
+
+Prisma Studio ist eine Weboberfläche für die Datenbank. Sie gehört nicht zum
+Stack und läuft nur, wenn man sie startet:
+
+```bash
+docker compose run --rm -p 5555:5555 api npx prisma studio --hostname 0.0.0.0 --browser none
+```
+
+Danach unter http://localhost:5555 erreichbar, Beenden mit `Strg+C`.
+
+Beide Zusätze sind nötig: `--hostname 0.0.0.0` lässt Studio Verbindungen von
+außerhalb des Containers annehmen — ohne das ist es trotz veröffentlichtem Port
+nicht erreichbar. `--browser none` verhindert den Versuch, im Container einen
+Browser zu öffnen.
+
+`docker compose exec api npx prisma studio` funktioniert **nicht**: Der
+api-Dienst veröffentlicht nur Port 3000, Studio bliebe im Container eingesperrt.
+
+Alternativ ohne Container, falls Node lokal installiert ist:
+
+```bash
+cd apps/api && npm run db:studio
+```
+
+Läuft dann direkt auf dem Rechner und belegt ebenfalls Port 5555 — beide
+Varianten gleichzeitig gehen also nicht.
 
 > **Achtung:** `docker compose down -v` löscht das Datenbank-Volume und damit
 > alle Benutzer. Ohne `-v` bleiben die Daten erhalten.
