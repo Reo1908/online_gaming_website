@@ -1,18 +1,96 @@
+# Entwicklungsumgebung: Datenbank, Backend und Frontend im Container,
+# Codeaenderungen greifen sofort.
+#
+#   docker compose up -d           alles starten
+#   docker compose logs -f         mitlesen
+#   docker compose down            stoppen
+#   docker compose up -d --build   nach Aenderung an package.json/Dockerfile
+#
+#   docker compose up -d db        nur die Datenbank, falls doch mal
+#                                  nativ mit npm run dev gearbeitet wird
+#
+#   Frontend  http://localhost:4200
+#   Backend   http://localhost:3000
+#
+# Fuer den Produktionsaufbau siehe compose.prod.yml bzw. compose.deploy.yml.
+#
+# Wichtig: Es werden nur src/ und prisma/ hineingespiegelt, nicht node_modules.
+# Nach einer Aenderung an package.json daher einmal neu bauen.
+
 services:
   db:
     image: postgres:16
-    container_name: postgres-db
+    container_name: friend-games-db
+    restart: unless-stopped
 
     environment:
       POSTGRES_USER: friendgames
       POSTGRES_PASSWORD: devpassword
       POSTGRES_DB: friendgames
 
+    # Nach aussen offen, damit Prisma Studio und psql vom Rechner
+    # aus weiterhin drankommen.
     ports:
-      - "5432:5432"
+      - '5432:5432'
 
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U friendgames -d friendgames']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile.dev
+
+    # Liest SESSION_SECRET und die Bootstrap-Zugangsdaten aus der
+    # vorhandenen Datei. Die Werte darunter haben Vorrang.
+    env_file:
+      - ./apps/api/.env
+
+    environment:
+      # Muss auf den Dienstnamen zeigen: "localhost" waere im Container
+      # der Container selbst, nicht die Datenbank.
+      DATABASE_URL: postgresql://friendgames:devpassword@db:5432/friendgames
+      APP_ORIGIN: http://localhost:4200
+      NODE_ENV: development
+      PORT: 3000
+
+    volumes:
+      # Nur der Quelltext. node_modules bleibt das des Containers --
+      # argon2 und die Prisma-Engine sind fuer Linux uebersetzt und
+      # wuerden von einem Windows-node_modules ueberdeckt und unbrauchbar.
+      - ./apps/api/src:/app/src
+      - ./apps/api/prisma:/app/prisma
+
+    ports:
+      - '3000:3000'
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+    # Offene Migrationen einspielen, dann mit Watch starten.
+    command: sh -c "npx prisma migrate deploy && npm run dev"
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile.dev
+
+    volumes:
+      - ./apps/web/src:/app/src
+      - ./apps/web/public:/app/public
+
+    ports:
+      - '4200:4200'
+
+    depends_on:
+      - api
 
 volumes:
   postgres_data:
