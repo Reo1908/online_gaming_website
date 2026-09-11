@@ -1,0 +1,24 @@
+# syntax=docker/dockerfile:1
+#
+# Entwicklungs-Image mit Angular Dev-Server. Der Quelltext kommt zur Laufzeit
+# per Mount aus compose.dev.yml. Fuer den echten Betrieb siehe Dockerfile.
+
+FROM node:22-bookworm-slim
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY angular.json tsconfig*.json ./
+COPY proxy.conf.docker.json ./
+
+EXPOSE 4200
+
+# --host 0.0.0.0  ohne das lauscht der Server nur containerintern
+# --poll          Bind-Mounts von Windows liefern keine inotify-Ereignisse
+# --proxy-config  im Container heisst das Backend "api", nicht "localhost"
+CMD ["npx", "ng", "serve", \
+     "--host", "0.0.0.0", \
+     "--port", "4200", \
+     "--poll", "1500", \
+     "--proxy-config", "proxy.conf.docker.json"]
