@@ -1,0 +1,32 @@
+<section class="hero">
+  <h1>Friend Games</h1>
+  <p>Spieleabend für dich und deine Freunde.</p>
+</section>
+
+<section class="status" [attr.data-state]="probe().state">
+  <h2>Systemstatus</h2>
+
+  @switch (probe().state) {
+    @case ('checking') {
+      <p class="line"><span class="dot checking"></span> Backend: wird geprüft …</p>
+    }
+    @case ('online') {
+      <p class="line"><span class="dot online"></span> Backend: online</p>
+      <p class="line"><span class="dot online"></span> Datenbank: verbunden</p>
+    }
+    @case ('offline') {
+      <p class="line"><span class="dot offline"></span> Backend: nicht erreichbar</p>
+      <p class="hint">
+        Läuft der API-Server? <code>npm run dev</code> in <code>apps/api</code> starten.
+      </p>
+    }
+  }
+
+  <button type="button" class="recheck" (click)="check()">Erneut prüfen</button>
+</section>
+
+@if (!auth.isLoggedIn()) {
+  <p class="cta">
+    <a routerLink="/login">Anmelden</a>, um dein Profil zu sehen.
+  </p>
+}

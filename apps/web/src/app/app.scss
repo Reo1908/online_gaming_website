@@ -1,0 +1,98 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  padding: 0.75rem 1.5rem;
+  border-bottom: 1px solid var(--p-surface-200);
+  background: var(--p-surface-0);
+  flex-wrap: wrap;
+}
+
+.brand {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-decoration: none;
+  color: var(--p-text-color);
+
+  span {
+    color: var(--p-primary-color);
+  }
+}
+
+.nav {
+  display: flex;
+  gap: 1.25rem;
+  margin-right: auto;
+
+  a {
+    text-decoration: none;
+    color: var(--p-text-muted-color);
+    font-size: 0.9375rem;
+    padding-block: 0.25rem;
+    border-bottom: 2px solid transparent;
+
+    &:hover {
+      color: var(--p-text-color);
+    }
+
+    &.active {
+      color: var(--p-primary-color);
+      border-bottom-color: var(--p-primary-color);
+    }
+  }
+}
+
+.session {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.who {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9375rem;
+}
+
+.role {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 0.125rem 0.4rem;
+  border-radius: 999px;
+  background: var(--p-surface-200);
+  color: var(--p-text-muted-color);
+
+  &.is-admin {
+    background: var(--p-primary-color);
+    color: var(--p-primary-contrast-color);
+  }
+}
+
+.content {
+  flex: 1;
+  width: 100%;
+  max-width: 960px;
+  margin-inline: auto;
+  padding: 2rem 1.5rem;
+}
+
+@media (max-width: 640px) {
+  .topbar {
+    gap: 1rem;
+  }
+
+  .nav {
+    order: 3;
+    width: 100%;
+    margin-right: 0;
+  }
+}

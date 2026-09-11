@@ -1,0 +1,43 @@
+h1 {
+  font-size: 1.5rem;
+  margin: 0 0 1.5rem;
+}
+
+.details {
+  display: grid;
+  grid-template-columns: minmax(8rem, auto) 1fr;
+  gap: 0.625rem 1.5rem;
+  margin: 0;
+  max-width: 32rem;
+
+  dt {
+    font-size: 0.875rem;
+    color: var(--p-text-muted-color);
+  }
+
+  dd {
+    margin: 0;
+  }
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8125rem;
+}
+
+.admin-hint {
+  margin-top: 2rem;
+  font-size: 0.9375rem;
+  color: var(--p-text-muted-color);
+}
+
+@media (max-width: 480px) {
+  .details {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+
+    dd {
+      margin-bottom: 0.75rem;
+    }
+  }
+}

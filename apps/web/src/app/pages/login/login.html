@@ -1,0 +1,39 @@
+<div class="wrap">
+  <h1>Anmelden</h1>
+
+  <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+    @if (error(); as message) {
+      <p-message severity="error" [text]="message" styleClass="full" />
+    }
+
+    <label for="username">Benutzername</label>
+    <input
+      pInputText
+      id="username"
+      formControlName="username"
+      autocomplete="username"
+      autofocus
+    />
+
+    <label for="password">Passwort</label>
+    <input
+      pInputText
+      id="password"
+      type="password"
+      formControlName="password"
+      autocomplete="current-password"
+    />
+
+    <p-button
+      type="submit"
+      label="Anmelden"
+      [loading]="busy()"
+      [disabled]="form.invalid"
+      styleClass="submit"
+    />
+  </form>
+
+  <p class="note">
+    Konten werden von einem Administrator angelegt. Es gibt keine Selbstregistrierung.
+  </p>
+</div>

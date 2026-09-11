@@ -1,0 +1,23 @@
+@if (auth.user(); as user) {
+  <h1>Profil</h1>
+
+  <dl class="details">
+    <dt>Anzeigename</dt>
+    <dd>{{ user.displayName }}</dd>
+
+    <dt>Benutzername</dt>
+    <dd>{{ user.username }}</dd>
+
+    <dt>Rolle</dt>
+    <dd>{{ user.role === 'ADMIN' ? 'Administrator' : 'Spieler' }}</dd>
+
+    <dt>Benutzer-ID</dt>
+    <dd class="mono">{{ user.id }}</dd>
+  </dl>
+
+  @if (user.role === 'ADMIN') {
+    <p class="admin-hint">
+      Du hast Administratorrechte — <a routerLink="/admin">Benutzer verwalten</a>.
+    </p>
+  }
+}

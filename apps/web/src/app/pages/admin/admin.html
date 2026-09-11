@@ -1,0 +1,234 @@
+<h1>Administration</h1>
+
+@if (error(); as message) {
+  <p-message severity="error" [text]="message" styleClass="full" />
+}
+@if (notice(); as message) {
+  <p-message severity="success" [text]="message" styleClass="full" />
+}
+
+<section class="panel">
+  <h2>Benutzer anlegen</h2>
+
+  <form [formGroup]="createForm" (ngSubmit)="create()" novalidate>
+    <div class="grid">
+      <div class="field">
+        <label for="username">Benutzername</label>
+        <input pInputText id="username" formControlName="username" autocomplete="off" />
+        <small>3–32 Zeichen, nur Buchstaben, Ziffern, _ und -</small>
+      </div>
+
+      <div class="field">
+        <label for="displayName">Anzeigename</label>
+        <input pInputText id="displayName" formControlName="displayName" autocomplete="off" />
+        <small>Wird anderen Spielern angezeigt</small>
+      </div>
+
+      <div class="field">
+        <label for="password">Startpasswort</label>
+        <input
+          pInputText
+          id="password"
+          type="password"
+          formControlName="password"
+          autocomplete="new-password"
+        />
+        <small>Mindestens 12 Zeichen</small>
+      </div>
+
+      <div class="field">
+        <label for="role">Rolle</label>
+        <select id="role" formControlName="role" class="select">
+          @for (role of roles; track role) {
+            <option [value]="role">{{ role === 'ADMIN' ? 'Administrator' : 'Spieler' }}</option>
+          }
+        </select>
+        <small>Administratoren dürfen Benutzer verwalten</small>
+      </div>
+    </div>
+
+    <p-button
+      type="submit"
+      label="Benutzer anlegen"
+      [loading]="busy()"
+      [disabled]="createForm.invalid"
+    />
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Benutzer ({{ users().length }})</h2>
+
+  @if (loading()) {
+    <p class="muted">Wird geladen …</p>
+  } @else if (users().length === 0) {
+    <p class="muted">Noch keine Benutzer vorhanden.</p>
+  } @else {
+    <p-table [value]="users()" styleClass="p-datatable-sm">
+      <ng-template #header>
+        <tr>
+          <th>Benutzername</th>
+          <th>Anzeigename</th>
+          <th>Rolle</th>
+          <th>Status</th>
+          <th>Angelegt</th>
+          <th class="actions-col">Aktionen</th>
+        </tr>
+      </ng-template>
+      <ng-template #body let-user>
+        <tr [class.inaktiv]="!user.isActive">
+          <td class="mono">
+            {{ user.username }}
+            @if (istIchSelbst(user)) {
+              <span class="self">du</span>
+            }
+          </td>
+          <td>{{ user.displayName }}</td>
+          <td>
+            <span class="tag" [class.is-admin]="user.role === 'ADMIN'">{{ user.role }}</span>
+          </td>
+          <td>{{ user.isActive ? 'Aktiv' : 'Deaktiviert' }}</td>
+          <td>{{ user.createdAt | date: 'dd.MM.yyyy HH:mm' }}</td>
+          <td class="actions-col">
+            <div class="actions">
+              <p-button
+                label="Bearbeiten"
+                severity="secondary"
+                size="small"
+                [text]="true"
+                (onClick)="openEdit(user)"
+              />
+              <!-- Gesperrte Aktionen bleiben sichtbar, aber deaktiviert:
+                   der Titel erklaert, warum sie nicht möglich sind. -->
+              <p-button
+                label="Löschen"
+                severity="danger"
+                size="small"
+                [text]="true"
+                [disabled]="loeschenGesperrt(user) !== null"
+                [pTooltip]="loeschenGesperrt(user) ?? ''"
+                (onClick)="deleting.set(user); dialogError.set(null)"
+              />
+            </div>
+          </td>
+        </tr>
+      </ng-template>
+    </p-table>
+  }
+</section>
+
+<!-- Bearbeiten -->
+<p-dialog
+  [visible]="editing() !== null"
+  (visibleChange)="$event || editing.set(null)"
+  [modal]="true"
+  [draggable]="false"
+  [style]="{ width: '28rem' }"
+  header="Benutzer bearbeiten"
+>
+  @if (editing(); as target) {
+    <form [formGroup]="editForm" (ngSubmit)="saveEdit()" novalidate class="dialog-form">
+      @if (dialogError(); as message) {
+        <p-message severity="error" [text]="message" styleClass="full" />
+      }
+
+      <div class="field">
+        <label for="editUsername">Benutzername</label>
+        <input pInputText id="editUsername" formControlName="username" autocomplete="off" />
+        <small>Damit meldet sich der Benutzer an</small>
+      </div>
+
+      <div class="field">
+        <label for="editDisplayName">Anzeigename</label>
+        <input pInputText id="editDisplayName" formControlName="displayName" autocomplete="off" />
+      </div>
+
+      <div class="field">
+        <label for="editRole">Rolle</label>
+        <select id="editRole" formControlName="role" class="select">
+          @for (role of roles; track role) {
+            <option [value]="role">{{ role === 'ADMIN' ? 'Administrator' : 'Spieler' }}</option>
+          }
+        </select>
+        @if (istIchSelbst(target)) {
+          <small class="warn">Die eigene Rolle kann nicht geändert werden</small>
+        }
+      </div>
+
+      <div class="field">
+        <label class="checkbox">
+          <input type="checkbox" formControlName="isActive" />
+          <span>Konto aktiv</span>
+        </label>
+        @if (istIchSelbst(target)) {
+          <small class="warn">Das eigene Konto kann nicht deaktiviert werden</small>
+        } @else {
+          <small>Deaktivierte Benutzer können sich nicht anmelden</small>
+        }
+      </div>
+
+      <div class="field">
+        <label for="editPassword">Neues Passwort</label>
+        <input
+          pInputText
+          id="editPassword"
+          type="password"
+          formControlName="password"
+          autocomplete="new-password"
+          placeholder="leer lassen = unverändert"
+        />
+        <small>Mindestens 12 Zeichen. Setzt alle offenen Sitzungen zurück.</small>
+      </div>
+
+      <div class="dialog-actions">
+        <p-button
+          label="Abbrechen"
+          severity="secondary"
+          [text]="true"
+          (onClick)="editing.set(null)"
+        />
+        <p-button
+          type="submit"
+          label="Speichern"
+          [loading]="busy()"
+          [disabled]="editForm.invalid"
+        />
+      </div>
+    </form>
+  }
+</p-dialog>
+
+<!-- Löschen bestätigen -->
+<p-dialog
+  [visible]="deleting() !== null"
+  (visibleChange)="$event || deleting.set(null)"
+  [modal]="true"
+  [draggable]="false"
+  [style]="{ width: '26rem' }"
+  header="Benutzer löschen"
+>
+  @if (deleting(); as target) {
+    @if (dialogError(); as message) {
+      <p-message severity="error" [text]="message" styleClass="full" />
+    }
+
+    <p>
+      Soll <strong>{{ target.displayName }}</strong> (<span class="mono">{{ target.username }}</span
+      >) wirklich gelöscht werden?
+    </p>
+    <p class="muted small">
+      Das Konto und alle zugehörigen Sitzungen werden entfernt. Das lässt sich nicht rückgängig
+      machen.
+    </p>
+
+    <div class="dialog-actions">
+      <p-button label="Abbrechen" severity="secondary" [text]="true" (onClick)="deleting.set(null)" />
+      <p-button
+        label="Endgültig löschen"
+        severity="danger"
+        [loading]="busy()"
+        (onClick)="confirmDelete()"
+      />
+    </div>
+  }
+</p-dialog>
