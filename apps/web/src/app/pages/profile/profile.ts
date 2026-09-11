@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import {
   AbstractControl,
@@ -9,7 +9,6 @@ import {
 } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
-import { AvatarModule } from 'primeng/avatar';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { DialogModule } from 'primeng/dialog';
@@ -32,7 +31,6 @@ function passwoerterGleich(group: AbstractControl): ValidationErrors | null {
   imports: [
     RouterLink,
     ReactiveFormsModule,
-    AvatarModule,
     ButtonModule,
     CardModule,
     DialogModule,
@@ -54,19 +52,6 @@ export class Profile {
   protected readonly dialogFehler = signal<string | null>(null);
   protected readonly notice = signal<string | null>(null);
   protected readonly idKopiert = signal(false);
-
-  /** Bis zu zwei Anfangsbuchstaben fuer den Avatar, z. B. "Max Mustermann" -> "MM". */
-  protected readonly initialen = computed(() => {
-    const name = this.auth.user()?.displayName ?? '';
-    return (
-      name
-        .split(/\s+/)
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((teil) => teil[0]?.toUpperCase() ?? '')
-        .join('') || '?'
-    );
-  });
 
   protected readonly form = this.fb.nonNullable.group(
     {

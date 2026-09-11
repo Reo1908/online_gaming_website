@@ -24,15 +24,6 @@ h1 {
 .identitaet {
   display: flex;
   align-items: center;
-  gap: 1.125rem;
-}
-
-:host ::ng-deep .avatar {
-  background: var(--p-primary-color);
-  color: var(--p-primary-contrast-color);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  flex-shrink: 0;
 }
 
 .namen {
