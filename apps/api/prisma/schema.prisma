@@ -1,0 +1,41 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  PLAYER
+}
+
+model User {
+  id           String    @id @default(uuid())
+  username     String    @unique
+  displayName  String
+  passwordHash String
+  role         Role      @default(PLAYER)
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  sessions     Session[]
+}
+
+/// Serverseitige Session.
+/// `id` ist der SHA-256-Hash des Session-Tokens, nicht das Token selbst.
+/// Damit kann aus einem Datenbank-Leak keine fremde Session uebernommen werden.
+model Session {
+  id        String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}

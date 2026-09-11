@@ -1,0 +1,237 @@
+import type { FastifyInstance } from 'fastify';
+import { Prisma } from '@prisma/client';
+import { z } from 'zod';
+import { prisma } from '../lib/prisma.js';
+import { hashPassword } from '../lib/password.js';
+import { requireAdmin } from '../lib/guards.js';
+
+/**
+ * Feldauswahl fuer jede Antwort dieser Datei.
+ * `passwordHash` fehlt hier absichtlich -- so kann er auch dann nicht
+ * nach aussen gelangen, wenn spaeter eine Route dazukommt.
+ */
+const PUBLIC_USER_FIELDS = {
+  id: true,
+  username: true,
+  displayName: true,
+  role: true,
+  isActive: true,
+  createdAt: true,
+} as const;
+
+const createUserSchema = z.object({
+  username: z
+    .string()
+    .trim()
+    .min(3, 'Benutzername muss mindestens 3 Zeichen haben')
+    .max(32, 'Benutzername darf höchstens 32 Zeichen haben')
+    .regex(/^[a-zA-Z0-9_-]+$/, 'Erlaubt sind Buchstaben, Ziffern, _ und -'),
+  displayName: z.string().trim().min(1).max(64),
+  password: z.string().min(12, 'Passwort muss mindestens 12 Zeichen haben').max(256),
+  role: z.enum(['ADMIN', 'PLAYER']).default('PLAYER'),
+});
+
+const usernameField = z
+  .string()
+  .trim()
+  .min(3, 'Benutzername muss mindestens 3 Zeichen haben')
+  .max(32, 'Benutzername darf höchstens 32 Zeichen haben')
+  .regex(/^[a-zA-Z0-9_-]+$/, 'Erlaubt sind Buchstaben, Ziffern, _ und -');
+
+const idParamSchema = z.object({ id: z.string().uuid('Ungültige Benutzer-ID') });
+
+/**
+ * Alle Felder optional: das Formular schickt nur, was sich geaendert hat.
+ * `password` leer zu lassen bedeutet "Passwort unveraendert" --
+ * deshalb ist es optional und nicht etwa ein leerer String.
+ */
+const updateUserSchema = z
+  .object({
+    username: usernameField.optional(),
+    displayName: z.string().trim().min(1).max(64).optional(),
+    role: z.enum(['ADMIN', 'PLAYER']).optional(),
+    isActive: z.boolean().optional(),
+    password: z.string().min(12, 'Passwort muss mindestens 12 Zeichen haben').max(256).optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, {
+    message: 'Es wurde keine Änderung übermittelt',
+  });
+
+/** Fehler mit vorgegebenem HTTP-Status, damit Regelverstoesse keine 500er werden. */
+class AdminActionError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * Verhindert, dass der letzte handlungsfaehige Administrator verschwindet.
+ * Ohne diese Pruefung koennte sich das System in einen Zustand bringen,
+ * aus dem heraus niemand mehr Benutzer verwalten kann.
+ */
+export async function assertNotLastAdmin(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  message: string,
+): Promise<void> {
+  const remaining = await tx.user.count({
+    where: { role: 'ADMIN', isActive: true, id: { not: userId } },
+  });
+
+  if (remaining === 0) throw new AdminActionError(409, message);
+}
+
+export async function adminRoutes(app: FastifyInstance): Promise<void> {
+  // Gilt fuer jede Route in diesem Plugin-Scope, auch fuer spaeter ergaenzte.
+  app.addHook('preHandler', requireAdmin);
+
+  app.get('/api/admin/users', async () => {
+    return prisma.user.findMany({
+      select: PUBLIC_USER_FIELDS,
+      orderBy: { createdAt: 'asc' },
+    });
+  });
+
+  app.post('/api/admin/users', async (request, reply) => {
+    const parsed = createUserSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: 'Ungültige Eingabe',
+        details: z.flattenError(parsed.error).fieldErrors,
+      });
+    }
+
+    const { username, displayName, password, role } = parsed.data;
+
+    try {
+      const user = await prisma.user.create({
+        data: {
+          username,
+          displayName,
+          passwordHash: await hashPassword(password),
+          role,
+        },
+        select: PUBLIC_USER_FIELDS,
+      });
+
+      return reply.code(201).send(user);
+    } catch (error) {
+      // P2002 = Unique-Verletzung. Auf die Pruefung per findUnique davor wird
+      // verzichtet, weil zwischen Pruefung und Insert ein Rennen entstehen kann.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        return reply.code(409).send({ error: 'Benutzername ist bereits vergeben' });
+      }
+      throw error;
+    }
+  });
+
+  app.patch('/api/admin/users/:id', async (request, reply) => {
+    const params = idParamSchema.safeParse(request.params);
+    if (!params.success) {
+      return reply.code(400).send({ error: 'Ungültige Benutzer-ID' });
+    }
+
+    const parsed = updateUserSchema.safeParse(request.body);
+    if (!parsed.success) {
+      const flat = z.flattenError(parsed.error);
+      return reply.code(400).send({
+        // formErrors faengt Regeln ab, die kein einzelnes Feld betreffen
+        // (etwa "gar keine Aenderung uebermittelt").
+        error: flat.formErrors[0] ?? 'Ungültige Eingabe',
+        details: flat.fieldErrors,
+      });
+    }
+
+    const { id } = params.data;
+    const { password, ...fields } = parsed.data;
+    const actor = request.user!;
+
+    // Selbstsperre abfangen, bevor ueberhaupt die Datenbank angefasst wird.
+    if (id === actor.id) {
+      if (fields.role === 'PLAYER') {
+        return reply.code(409).send({ error: 'Du kannst dir nicht selbst die Adminrechte entziehen' });
+      }
+      if (fields.isActive === false) {
+        return reply.code(409).send({ error: 'Du kannst dein eigenes Konto nicht deaktivieren' });
+      }
+    }
+
+    try {
+      const user = await prisma.$transaction(async (tx) => {
+        const target = await tx.user.findUnique({ where: { id }, select: { id: true, role: true } });
+        if (!target) throw new AdminActionError(404, 'Benutzer nicht gefunden');
+
+        const verliertAdminrechte =
+          target.role === 'ADMIN' && (fields.role === 'PLAYER' || fields.isActive === false);
+
+        if (verliertAdminrechte) {
+          await assertNotLastAdmin(tx, id, 'Der letzte aktive Administrator kann nicht herabgestuft werden');
+        }
+
+        const updated = await tx.user.update({
+          where: { id },
+          data: {
+            ...fields,
+            ...(password ? { passwordHash: await hashPassword(password) } : {}),
+          },
+          select: PUBLIC_USER_FIELDS,
+        });
+
+        // Neues Passwort oder Deaktivierung muss laufende Sitzungen beenden,
+        // sonst bleibt der Betroffene mit dem alten Cookie weiter angemeldet.
+        if (password || fields.isActive === false) {
+          await tx.session.deleteMany({ where: { userId: id } });
+        }
+
+        return updated;
+      });
+
+      return user;
+    } catch (error) {
+      if (error instanceof AdminActionError) {
+        return reply.code(error.status).send({ error: error.message });
+      }
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        return reply.code(409).send({ error: 'Benutzername ist bereits vergeben' });
+      }
+      throw error;
+    }
+  });
+
+  app.delete('/api/admin/users/:id', async (request, reply) => {
+    const params = idParamSchema.safeParse(request.params);
+    if (!params.success) {
+      return reply.code(400).send({ error: 'Ungültige Benutzer-ID' });
+    }
+
+    const { id } = params.data;
+
+    if (id === request.user!.id) {
+      return reply.code(409).send({ error: 'Du kannst dein eigenes Konto nicht löschen' });
+    }
+
+    try {
+      await prisma.$transaction(async (tx) => {
+        const target = await tx.user.findUnique({ where: { id }, select: { id: true, role: true } });
+        if (!target) throw new AdminActionError(404, 'Benutzer nicht gefunden');
+
+        if (target.role === 'ADMIN') {
+          await assertNotLastAdmin(tx, id, 'Der letzte aktive Administrator kann nicht gelöscht werden');
+        }
+
+        // Sessions verschwinden ueber onDelete: Cascade automatisch mit.
+        await tx.user.delete({ where: { id } });
+      });
+
+      return reply.code(204).send();
+    } catch (error) {
+      if (error instanceof AdminActionError) {
+        return reply.code(error.status).send({ error: error.message });
+      }
+      throw error;
+    }
+  });
+}
