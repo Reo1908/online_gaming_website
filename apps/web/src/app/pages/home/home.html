@@ -1,16 +1,4 @@
-<section class="hero">
-  <h1>Friend Games</h1>
-  <p class="lead">Spieleabend für dich und deine Freunde.</p>
-
-  @if (auth.user(); as user) {
-    <p class="gruss">Schön, dass du da bist, {{ user.displayName }}.</p>
-    <p-button label="Zum Profil" icon="pi pi-user" routerLink="/profile" />
-  } @else {
-    <p-button label="Anmelden" icon="pi pi-sign-in" routerLink="/login" />
-  }
-</section>
-
-<section class="bald">
+<section class="platzhalter">
   <h2>Demnächst</h2>
   <p>Hier entstehen die Spiele. Noch ist es ruhig.</p>
 </section>

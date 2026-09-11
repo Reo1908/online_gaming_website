@@ -1,28 +1,11 @@
-.hero {
-  padding-block: 3rem 2.5rem;
-  text-align: center;
-
-  h1 {
-    font-size: clamp(2rem, 6vw, 2.75rem);
-    margin: 0 0 0.5rem;
-    letter-spacing: -0.03em;
-  }
-}
-
-.lead {
-  margin: 0 0 1.75rem;
-  font-size: 1.0625rem;
-  color: var(--p-text-muted-color);
-}
-
-.gruss {
-  margin: 0 0 1.25rem;
-  font-size: 0.9375rem;
-}
-
-.bald {
-  border-top: 1px solid var(--p-surface-200);
-  padding-top: 2rem;
+.platzhalter {
+  /* Der Platzhalter ist der einzige Inhalt der Seite. Ohne diese Hoehe
+     klebte er direkt unter der Kopfzeile und die Seite wirkte kaputt. */
+  min-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   text-align: center;
 
   h2 {
