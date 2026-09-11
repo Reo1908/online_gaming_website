@@ -305,6 +305,33 @@ Die `.env` gehört nicht ins Repo, existiert auf dem Server aber trotzdem — si
 wird dort einmal von Hand angelegt. `.env.example` ist die Vorlage dafür; die
 Geheimnisse kommen getrennt dorthin (Passwortmanager, `scp`), nie über git.
 
+Der Stack bringt **Caddy** als TLS-Endpunkt mit. Er holt das Zertifikat bei
+Let's Encrypt selbst und erneuert es auch selbst. Nötig sind dafür nur zwei
+Dinge:
+
+- ein DNS-Eintrag, der `PUBLIC_DOMAIN` auf die öffentliche Adresse des Servers
+  zeigt (A-Record, bei IPv6 zusätzlich AAAA),
+- Port **80 und 443** von außen erreichbar. Let's Encrypt prüft über genau
+  diese beiden; ist 80 zu, kommt kein Zertifikat zustande.
+
+`APP_ORIGIN` muss dieselbe Domain sein, mit `https://` davor und ohne
+Schrägstrich am Ende. Die Anwendung selbst bleibt unveröffentlicht: `WEB_PORT`
+bindet per Vorgabe auf `127.0.0.1`, erreichbar ist von außen nur Caddy.
+
+Ob es geklappt hat, steht im Log — beim ersten Start dauert die Ausstellung
+ein paar Sekunden:
+
+```bash
+docker compose -f compose.deploy.yml logs caddy
+```
+
+Das Zertifikat liegt im Volume `caddy_data`. Das muss bleiben: ohne es beantragt
+Caddy nach jedem Neustart ein neues und läuft irgendwann in die
+Ausstellungsgrenzen von Let's Encrypt.
+
+> Wer schon einen eigenen Proxy betreibt, löscht den `caddy`-Dienst aus
+> `compose.deploy.yml` und setzt `WEB_PORT` auf den Port, den dieser anspricht.
+
 `IMAGE_TAG` in der `.env` bestimmt die Version. Zurückrollen heißt: alten Tag
 eintragen, Befehle wiederholen.
 
@@ -346,19 +373,26 @@ Zwei Stolpersteine dabei:
 Sechs Dinge, die auf dem Server erledigt sein sollten — die ersten drei, bevor
 jemand anderes die Adresse bekommt:
 
-1. **TLS-Proxy davor und `APP_ORIGIN=https://…`.** Ohne HTTPS wandern Passwörter
-   und Session-Cookies im Klartext durchs Netz. Das `Secure`-Flag des Cookies
-   hängt an `APP_ORIGIN`, nicht an `NODE_ENV`.
-2. **`WEB_PORT=127.0.0.1:8080`.** Sonst veröffentlicht Docker den Port auf allen
-   Schnittstellen und die Seite ist am Proxy vorbei zusätzlich unverschlüsselt
-   erreichbar. Der Proxy spricht dann `127.0.0.1:8080` an.
+1. **`PUBLIC_DOMAIN` und `APP_ORIGIN` müssen zusammenpassen.** Dieselbe Domain,
+   einmal ohne und einmal mit `https://`, kein Schrägstrich am Ende. Das
+   `Secure`-Flag des Session-Cookies hängt an `APP_ORIGIN`, nicht an
+   `NODE_ENV`: Steht dort `https`, läuft die Seite aber über `http`, verwirft
+   der Browser das Cookie kommentarlos — der Login scheint zu klappen und ist
+   sofort wieder weg.
+2. **`WEB_PORT` auf `127.0.0.1:8080` lassen.** Nach außen gehört nur Caddy.
+   Ein öffentlich veröffentlichter Port wäre nicht nur unverschlüsselt
+   erreichbar, er ließe auch den Weg an Caddy vorbei offen — und damit eine
+   selbst behauptete `X-Forwarded-For` (siehe Punkt 3).
 3. **`TRUST_PROXY` prüfen.** Der Standard `uniquelocal` passt für den üblichen
    Aufbau: nginx im web-Dienst, davor ein TLS-Proxy auf demselben Rechner.
    Stimmt der Wert nicht, sieht die API bei jedem Aufruf dieselbe Proxy-IP —
    dann teilen sich **alle** Besucher ein Rate-Limit und sperren sich
    gegenseitig aus (10 Loginversuche pro Minute für die ganze Seite).
    Gegenprobe im Log: `docker compose -f compose.deploy.yml logs api` muss bei
-   `remoteAddress` die echte Besucher-IP zeigen, nicht `172.x.x.x`.
+   `remoteAddress` die echte Besucher-IP zeigen, nicht `172.x.x.x`. Caddy
+   verwirft eine vom Besucher selbst mitgeschickte `X-Forwarded-For` und setzt
+   die tatsächliche Absenderadresse ein — solange niemand an Caddy vorbeikommt,
+   lässt sich das Rate-Limit also nicht austricksen.
 4. **An der Registry anmelden.** Pakete auf ghcr sind standardmäßig privat, dann
    scheitert `pull` mit „denied". Entweder beide Pakete auf GitHub öffentlich
    stellen oder einmalig anmelden:

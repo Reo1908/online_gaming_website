@@ -7,10 +7,29 @@
 #
 # IMAGE_TAG in der .env steuert, welche Version laeuft. Ein Zurueckrollen
 # ist damit ein Tag-Wechsel plus erneutes `up -d`.
+#
+# Caddy sitzt davor und holt das TLS-Zertifikat selbst. Dafuer muss die
+# Domain aus PUBLIC_DOMAIN auf diesen Server zeigen und 80/443 erreichbar
+# sein -- Let's Encrypt prueft ueber genau diese beiden Ports.
 
 # Docker dreht Logdateien von sich aus nicht: ohne diese Grenze waechst das
 # Log jedes Dienstes unbegrenzt weiter, bis die Platte voll ist. Die API
 # schreibt in Produktion eine Zeile pro Anfrage.
+# Die Caddy-Konfiguration steht hier drin statt in einer eigenen Datei:
+# so bleibt es bei einer Datei plus .env auf dem Server. ${PUBLIC_DOMAIN}
+# setzt Docker Compose beim Start ein.
+configs:
+  caddyfile:
+    content: |
+      ${PUBLIC_DOMAIN} {
+          reverse_proxy web:80
+
+          # Sagt dem Browser, es kuenftig gar nicht erst ueber http zu
+          # versuchen. Bewusst ohne includeSubDomains und preload -- die
+          # beiden liessen sich nur schwer wieder zuruecknehmen.
+          header Strict-Transport-Security "max-age=31536000"
+      }
+
 x-logging: &logging
   driver: json-file
   options:
@@ -74,15 +93,49 @@ services:
     restart: unless-stopped
     logging: *logging
 
+    # Nach aussen geht nur noch Caddy; hierher kommt man ueber das interne
+    # Netz. Die Vorgabe oeffnet einen Zugang zum Nachsehen, der nur auf dem
+    # Server selbst erreichbar ist -- nicht im Netz.
     ports:
-      # In Produktion sinnvollerweise an 127.0.0.1 binden und einen
-      # TLS-Proxy (Caddy, Traefik, nginx) davorsetzen -- das Session-Cookie
-      # bekommt sein Secure-Flag nur bei einem https-APP_ORIGIN.
-      - '${WEB_PORT:-8080}:80'
+      - '${WEB_PORT:-127.0.0.1:8080}:80'
 
     depends_on:
       api:
         condition: service_healthy
 
+  # ------------------------------------------------------------------
+  # TLS-Endpunkt. Holt und erneuert das Zertifikat selbstaendig und reicht
+  # alles an den nginx im web-Dienst weiter -- auch die Socket-Verbindung,
+  # dafuer ist nichts einzustellen.
+  # ------------------------------------------------------------------
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    logging: *logging
+
+    ports:
+      - '80:80'
+      - '443:443'
+      # HTTP/3 laeuft ueber UDP. Fehlt die Zeile, faellt der Browser
+      # stillschweigend auf HTTP/2 zurueck.
+      - '443:443/udp'
+
+    configs:
+      - source: caddyfile
+        target: /etc/caddy/Caddyfile
+
+    volumes:
+      # Muss erhalten bleiben: hier liegen Zertifikat und ACME-Konto. Ohne
+      # das beantragt Caddy nach jedem Neustart ein neues Zertifikat und
+      # laeuft irgendwann in die Ausstellungsgrenzen von Let's Encrypt.
+      - caddy_data:/data
+      - caddy_config:/config
+
+    depends_on:
+      web:
+        condition: service_healthy
+
 volumes:
   postgres_data:
+  caddy_data:
+  caddy_config:
