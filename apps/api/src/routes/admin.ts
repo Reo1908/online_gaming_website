@@ -274,6 +274,16 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       if (error instanceof AdminActionError) {
         return reply.code(error.status).send({ error: error.message });
       }
+      // P2003 = Fremdschluessel verletzt. Tritt auf, sobald der Benutzer an
+      // einer Partie teilgenommen hat: MatchPlayer haengt mit Restrict daran,
+      // damit abgeschlossene Partien nicht ploetzlich einen Spieler vermissen.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+        return reply.code(409).send({
+          error:
+            'Benutzer hat an Partien teilgenommen und kann nicht gelöscht werden. ' +
+            'Konto stattdessen deaktivieren.',
+        });
+      }
       throw error;
     }
   });

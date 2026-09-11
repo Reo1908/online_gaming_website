@@ -148,6 +148,29 @@ apps/
       pages/    home, login, profile, admin, status
 ```
 
+### Datenmodell
+
+| Modell | Wofür |
+|---|---|
+| `User` | Konto mit Rolle (`ADMIN` / `PLAYER`) |
+| `Session` | Serverseitige Anmeldung, speichert nur den Token-Hash |
+| `Game` | Eine Spielart, z. B. „Vier gewinnt" — nicht eine einzelne Partie |
+| `Match` | Eine konkrete Partie: `LOBBY` → `RUNNING` → `FINISHED` / `ABORTED` |
+| `MatchPlayer` | Teilnahme eines Benutzers an einer Partie, mit Ergebnis |
+| `OverallStat` | Bilanz über alle Spiele hinweg, Grundlage der Rangliste |
+
+Zwei Entscheidungen, die beim Weiterbauen wichtig sind:
+
+- **Ein Benutzer mit Partien lässt sich nicht löschen.** `MatchPlayer` hängt mit
+  `onDelete: Restrict` am Benutzer — sonst blieben abgeschlossene Partien mit
+  einem fehlenden Gegner zurück. Die Verwaltung antwortet in dem Fall mit einer
+  Erklärung und dem Hinweis, das Konto stattdessen zu deaktivieren.
+- **`OverallStat` wird fortgeschrieben, nicht berechnet.** Beim Ende einer
+  Partie werden die Zähler erhöht, statt für jede Anzeige der Rangliste alle
+  Partien neu zusammenzuzählen.
+
+Noch nicht angelegt: `GameStat` (Bilanz je Spiel) und `AuditLog`.
+
 ### Endpunkte
 
 | Methode | Pfad | Zugriff |

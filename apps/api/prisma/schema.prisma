@@ -15,6 +15,23 @@ enum Role {
   PLAYER
 }
 
+enum MatchStatus {
+  /// Erstellt, wartet auf Mitspieler.
+  LOBBY
+  /// Laeuft gerade.
+  RUNNING
+  /// Regulaer beendet, Ergebnisse stehen fest.
+  FINISHED
+  /// Abgebrochen -- zaehlt fuer keine Statistik.
+  ABORTED
+}
+
+enum MatchResult {
+  WIN
+  LOSS
+  DRAW
+}
+
 model User {
   id           String    @id @default(uuid())
   username     String    @unique
@@ -23,7 +40,11 @@ model User {
   role         Role      @default(PLAYER)
   isActive     Boolean   @default(true)
   createdAt    DateTime  @default(now())
-  sessions     Session[]
+
+  sessions       Session[]
+  matchPlayers   MatchPlayer[]
+  createdMatches Match[]       @relation("MatchCreator")
+  overallStat    OverallStat?
 }
 
 /// Serverseitige Session.
@@ -38,4 +59,90 @@ model Session {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+/// Eine Spielart, etwa "Vier gewinnt" -- nicht eine einzelne Partie.
+model Game {
+  id          String   @id @default(uuid())
+  /// Kurzform fuer URLs und Socket-Raeume, z. B. "vier-gewinnt".
+  slug        String   @unique
+  name        String
+  description String?
+  minPlayers  Int      @default(2)
+  maxPlayers  Int      @default(2)
+  /// Deaktivierte Spiele verschwinden aus der Auswahl, bleiben aber in
+  /// bereits gespielten Partien erhalten.
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  matches Match[]
+
+  @@index([isActive])
+}
+
+/// Eine konkrete Partie: von der Lobby bis zum Ergebnis.
+model Match {
+  id       String      @id @default(uuid())
+  gameId   String
+  game     Game        @relation(fields: [gameId], references: [id], onDelete: Restrict)
+  status   MatchStatus @default(LOBBY)
+
+  /// Wer die Lobby geoeffnet hat. Optional, damit eine Partie das Loeschen
+  /// des Erstellers ueberlebt -- die Historie der Mitspieler bleibt so intakt.
+  createdById String?
+  createdBy   User?   @relation("MatchCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  startedAt  DateTime?
+  finishedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  players MatchPlayer[]
+
+  @@index([gameId])
+  @@index([status])
+  // Fuer "letzte Partien zuerst" in der Match-History.
+  @@index([createdAt])
+}
+
+/// Teilnahme eines Benutzers an einer Partie, samt seinem Ergebnis.
+model MatchPlayer {
+  id      String @id @default(uuid())
+  matchId String
+  match   Match  @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  userId  String
+  /// Restrict statt Cascade: wuerde das Loeschen eines Benutzers seine
+  /// Teilnahmen mitnehmen, blieben abgeschlossene Partien mit einem
+  /// fehlenden Gegner zurueck. Stattdessen wird das Konto deaktiviert.
+  user    User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  /// Bleibt leer, solange die Partie laeuft.
+  result MatchResult?
+  /// Spielabhaengige Punktzahl; nicht jedes Spiel hat eine.
+  score  Int?
+  /// Platzierung ab 1. Bei zwei Spielern redundant, bei mehr nicht.
+  placement Int?
+
+  joinedAt DateTime @default(now())
+
+  /// Niemand sitzt zweimal in derselben Partie.
+  @@unique([matchId, userId])
+  @@index([userId])
+}
+
+/// Zusammengefasste Bilanz eines Benutzers ueber alle Spiele hinweg.
+/// Wird bei jedem Partieende fortgeschrieben, statt fuer jede Anzeige der
+/// Rangliste alle Partien neu durchzurechnen.
+model OverallStat {
+  userId String @id
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  matchesPlayed Int @default(0)
+  wins          Int @default(0)
+  losses        Int @default(0)
+  draws         Int @default(0)
+
+  updatedAt DateTime @updatedAt
+
+  /// Sortierreihenfolge der Rangliste.
+  @@index([wins])
 }
