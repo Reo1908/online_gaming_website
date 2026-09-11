@@ -8,10 +8,13 @@ export async function leaderboardRoutes(app: FastifyInstance): Promise<void> {
    *
    * Aufgefuehrt werden auch Spieler ohne Partie -- sonst taucht ein neues
    * Konto erst nach dem ersten Spiel auf und wirkt, als fehle es.
+   *
+   * Verborgene Konten bleiben aussen vor: Test- und Verwaltungskonten
+   * sollen die Wertung nicht verfaelschen.
    */
   app.get('/api/leaderboard', { preHandler: requireAuth }, async () => {
     const benutzer = await prisma.user.findMany({
-      where: { isActive: true },
+      where: { isActive: true, isVisible: true },
       select: {
         id: true,
         username: true,

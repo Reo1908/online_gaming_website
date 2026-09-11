@@ -42,6 +42,9 @@
         @if (!a.user.isActive) {
           <p-tag severity="danger" value="Deaktiviert" />
         }
+        @if (!a.user.isVisible) {
+          <p-tag severity="warn" value="Nicht in der Rangliste" />
+        }
       </div>
     </div>
 

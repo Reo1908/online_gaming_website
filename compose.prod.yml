@@ -6,10 +6,20 @@
 # Fuer die taegliche Entwicklung weiter compose.yml + npm run dev benutzen --
 # das ist beim Neuladen deutlich schneller.
 
+# Docker dreht Logdateien von sich aus nicht: ohne diese Grenze waechst das
+# Log jedes Dienstes unbegrenzt weiter, bis die Platte voll ist. Die API
+# schreibt in Produktion eine Zeile pro Anfrage.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '3'
+
 services:
   db:
     image: postgres:16
     restart: unless-stopped
+    logging: *logging
 
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -33,12 +43,26 @@ services:
     build:
       context: ./apps/api
     restart: unless-stopped
+    logging: *logging
 
     environment:
       # `db` ist der Dienstname oben und zugleich der Hostname im Netz.
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       SESSION_SECRET: ${SESSION_SECRET}
       APP_ORIGIN: ${APP_ORIGIN:-http://localhost:8080}
+
+      # Welchen vorgelagerten Adressen ihr X-Forwarded-For geglaubt wird.
+      # "uniquelocal" = die privaten Netze, also der nginx aus dem web-Dienst
+      # und ein TLS-Proxy auf demselben Rechner. Ohne das sieht die API bei
+      # jedem Aufruf dieselbe Proxy-IP -- dann teilen sich alle Besucher ein
+      # Rate-Limit und sperren sich gegenseitig aus.
+      TRUST_PROXY: ${TRUST_PROXY:-uniquelocal}
+
+      # Nur fuer den einmaligen Seed-Lauf gefuellt (erster Administrator),
+      # im Normalbetrieb leer -- siehe README, Abschnitt "Auf einem Server".
+      ADMIN_BOOTSTRAP_USERNAME: ${ADMIN_BOOTSTRAP_USERNAME:-}
+      ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-}
+
       NODE_ENV: production
       PORT: 3000
 
@@ -54,6 +78,7 @@ services:
     build:
       context: ./apps/web
     restart: unless-stopped
+    logging: *logging
 
     ports:
       - '${WEB_PORT:-8080}:80'

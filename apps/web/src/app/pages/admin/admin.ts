@@ -117,6 +117,7 @@ export class Admin {
     displayName: ['', [Validators.required, Validators.maxLength(64)]],
     password: ['', [Validators.required, Validators.minLength(12)]],
     role: ['PLAYER' as Role, Validators.required],
+    isVisible: [true],
   });
 
   protected readonly editForm = this.fb.nonNullable.group({
@@ -124,6 +125,7 @@ export class Admin {
     displayName: ['', [Validators.required, Validators.maxLength(64)]],
     role: ['PLAYER' as Role, Validators.required],
     isActive: [true],
+    isVisible: [true],
     // Leer lassen heisst "nicht aendern", darum hier kein `required`.
     password: ['', [Validators.minLength(12)]],
   });
@@ -173,7 +175,7 @@ export class Admin {
       const user = await firstValueFrom(this.api.createUser(this.createForm.getRawValue()));
       this.users.update((list) => [...list, user]);
       this.notice.set(`Benutzer „${user.username}“ wurde angelegt.`);
-      this.createForm.reset({ role: 'PLAYER' });
+      this.createForm.reset({ role: 'PLAYER', isVisible: true });
       this.erzeugtesPasswort.set(null);
     } catch (err) {
       this.error.set(this.messageFor(err, 'Benutzer konnte nicht angelegt werden.'));
@@ -211,6 +213,7 @@ export class Admin {
       displayName: user.displayName,
       role: user.role,
       isActive: user.isActive,
+      isVisible: user.isVisible,
       password: '',
     });
 
@@ -242,6 +245,7 @@ export class Admin {
     if (values.displayName !== target.displayName) changes.displayName = values.displayName;
     if (values.role !== target.role) changes.role = values.role;
     if (values.isActive !== target.isActive) changes.isActive = values.isActive;
+    if (values.isVisible !== target.isVisible) changes.isVisible = values.isVisible;
     if (values.password) changes.password = values.password;
 
     if (Object.keys(changes).length === 0) {

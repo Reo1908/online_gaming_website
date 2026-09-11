@@ -4,6 +4,9 @@ import type { Observable } from 'rxjs';
 import type {
   AdminUser,
   CreateUserInput,
+  Partie,
+  PartieAnlegen,
+  SpielArt,
   OverallStats,
   StatAdjustment,
   SupportView,
@@ -52,6 +55,44 @@ export class ApiService {
       currentPassword,
       newPassword,
     });
+  }
+
+  spielarten(): Observable<SpielArt[]> {
+    return this.http.get<SpielArt[]>('/api/games');
+  }
+
+  /** Partien, in denen der angemeldete Benutzer gerade steckt. */
+  meinePartien(): Observable<Partie[]> {
+    return this.http.get<Partie[]>('/api/matches');
+  }
+
+  partieAnlegen(eingabe: PartieAnlegen): Observable<Partie> {
+    return this.http.post<Partie>('/api/matches', eingabe);
+  }
+
+  partie(code: string): Observable<Partie> {
+    return this.http.get<Partie>(`/api/matches/${code}`);
+  }
+
+  partieBeitreten(code: string): Observable<Partie> {
+    return this.http.post<Partie>(`/api/matches/${code}/join`, {});
+  }
+
+  partieVerlassen(code: string): Observable<void> {
+    return this.http.post<void>(`/api/matches/${code}/leave`, {});
+  }
+
+  partieStarten(code: string): Observable<Partie> {
+    return this.http.post<Partie>(`/api/matches/${code}/start`, {});
+  }
+
+  /** `gewertet` sagt, ob die Partie in die Bilanzen eingegangen ist. */
+  partieBeenden(code: string): Observable<Partie & { gewertet: boolean }> {
+    return this.http.post<Partie & { gewertet: boolean }>(`/api/matches/${code}/finish`, {});
+  }
+
+  partieAbbrechen(code: string): Observable<Partie> {
+    return this.http.post<Partie>(`/api/matches/${code}/abort`, {});
   }
 
   systemStatus(): Observable<SystemStatus> {

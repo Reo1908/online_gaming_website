@@ -141,7 +141,7 @@ apps/
     prisma/     Schema und Migrationen
     src/
       lib/      Datenbank, Passwörter, Sessions, Guards
-      routes/   health, auth, admin
+      routes/   health, auth, leaderboard, matches, admin, support
   web/          Angular 21 + PrimeNG
     src/app/
       core/     Services, Guards, Interceptor, Typen
@@ -152,15 +152,15 @@ apps/
 
 | Modell | Wofür |
 |---|---|
-| `User` | Konto mit Rolle (`ADMIN` / `PLAYER`) |
+| `User` | Konto mit Rolle (`ADMIN` / `PLAYER`), Status und Sichtbarkeit |
 | `Session` | Serverseitige Anmeldung, speichert nur den Token-Hash |
 | `Game` | Eine Spielart, z. B. „Vier gewinnt" — nicht eine einzelne Partie |
-| `Match` | Eine konkrete Partie: `LOBBY` → `RUNNING` → `FINISHED` / `ABORTED` |
-| `MatchPlayer` | Teilnahme eines Benutzers an einer Partie, mit Ergebnis |
+| `Match` | Eine konkrete Partie: `LOBBY` → `RUNNING` → `FINISHED` / `ABORTED`, mit Beitrittscode und Einstellungen |
+| `MatchPlayer` | Teilnahme eines Benutzers an einer Partie, mit Ergebnis; eine davon ist die Spielleitung |
 | `OverallStat` | Bilanz über alle Spiele hinweg, Grundlage der Rangliste |
 | `AuditLog` | Wer hat wann an welchem Konto was geändert — und warum |
 
-Zwei Entscheidungen, die beim Weiterbauen wichtig sind:
+Drei Entscheidungen, die beim Weiterbauen wichtig sind:
 
 - **Ein Benutzer mit Partien lässt sich nicht löschen.** `MatchPlayer` hängt mit
   `onDelete: Restrict` am Benutzer — sonst blieben abgeschlossene Partien mit
@@ -169,6 +169,9 @@ Zwei Entscheidungen, die beim Weiterbauen wichtig sind:
 - **`OverallStat` wird fortgeschrieben, nicht berechnet.** Beim Ende einer
   Partie werden die Zähler erhöht, statt für jede Anzeige der Rangliste alle
   Partien neu zusammenzuzählen.
+- **Aktiv und sichtbar sind zwei Schalter.** `isActive` entscheidet über die
+  Anmeldung, `isVisible` allein über die Rangliste. Ein Test- oder
+  Verwaltungskonto kann so mitspielen, ohne in der Wertung aufzutauchen.
 
 Noch nicht angelegt: `GameStat` (Bilanz je Spiel).
 
@@ -186,6 +189,15 @@ ohne diese Kopien wäre danach nicht mehr erkennbar, um wen es ging.
 | GET | `/api/auth/me` | angemeldet |
 | GET | `/api/auth/session` | offen |
 | GET | `/api/leaderboard` | angemeldet |
+| GET | `/api/games` | angemeldet |
+| GET | `/api/matches` | angemeldet |
+| POST | `/api/matches` | angemeldet |
+| GET | `/api/matches/:code` | angemeldet |
+| POST | `/api/matches/:code/join` | angemeldet |
+| POST | `/api/matches/:code/leave` | angemeldet |
+| POST | `/api/matches/:code/start` | Spielleitung |
+| POST | `/api/matches/:code/finish` | Spielleitung |
+| POST | `/api/matches/:code/abort` | Spielleitung |
 | POST | `/api/auth/change-password` | angemeldet |
 | GET | `/api/admin/status` | Administrator |
 | GET | `/api/admin/users` | Administrator |
@@ -194,6 +206,44 @@ ohne diese Kopien wäre danach nicht mehr erkennbar, um wen es ging.
 | POST | `/api/admin/users` | Administrator |
 | PATCH | `/api/admin/users/:id` | Administrator |
 | DELETE | `/api/admin/users/:id` | Administrator |
+
+---
+
+## Wie eine Partie ablaeuft
+
+Wer eine Lobby oeffnet, leitet sie: Die Spielleitung waehlt das Spiel, vergibt
+einen Namen und stellt ein, wie viele Punkte ein Treffer bringt. Die Lobby zeigt
+einen sechsstelligen Code, mit dem die anderen beitreten, solange sie wartet.
+
+Beim Buzzer-Spiel gibt die Leitung eine Runde frei, alle anderen tippen ihre
+Antwort und buzzern. Wer zuerst drueckt, steht oben — mit der Zeit seit der
+Freigabe. Punkte vergibt allein die Leitung. Am Ende schreibt `finish` die
+Ergebnisse fest und zaehlt die Bilanzen hoch; `abort` beendet ohne Wertung.
+
+Die Spielleitung spielt nicht mit und taucht in keiner Wertung auf. Gewertet
+wird ab zwei Mitspielenden — sonst gewaenne ein einzelner Spieler jede Partie
+gegen sich selbst.
+
+### Der Live-Teil
+
+Getippter Text, Buzzer und Punktestand laufen ueber Socket.IO unter
+`/api/socket.io` — derselbe Pfad wie die REST-Aufrufe, damit nginx im Betrieb
+und der Angular-Proxy in der Entwicklung ohne eine zweite Weiterleitung
+auskommen. Angemeldet wird der Socket ueber dasselbe Session-Cookie.
+
+Was waehrend einer Runde entsteht, bleibt im Arbeitsspeicher der API: bei jedem
+Tastendruck in die Datenbank zu schreiben waere teuer und ohne Nutzen. Punkte,
+Teilnehmer und Status stehen dagegen sofort in der Datenbank. Ein Neustart der
+API kostet also die laufende Runde, nicht den Spielstand.
+
+Die Antworten sieht standardmaessig nur die Spielleitung. Dafuer sitzen Leitung
+und Mitspieler in getrennten Socket-Raeumen — die Mitspieler bekommen den Text
+der anderen gar nicht erst geschickt, statt ihn nur auszublenden.
+
+Ein neues Spiel kommt in `apps/api/src/lib/spiele.ts` dazu: Eintrag in
+`SPIELARTEN` mit einem Zod-Schema fuer seine Einstellungen. Die Tabelle `Game`
+wird daraus beim Start abgeglichen, das Formular im Frontend nimmt die
+Standardwerte von dort.
 
 ---
 
@@ -239,6 +289,9 @@ docker compose -f compose.prod.yml up -d --build
 Läuft dann auf http://localhost:8080 — Angular wird gebaut und von nginx
 ausgeliefert, kein Dev-Server.
 
+Auch hier gibt es noch kein Konto: der Seed unten läuft genauso, nur mit
+`-f compose.prod.yml` statt `-f compose.deploy.yml`.
+
 ### Auf einem Server
 
 Dort werden nur `compose.deploy.yml` und eine `.env` gebraucht, kein Quelltext:
@@ -248,11 +301,86 @@ docker compose -f compose.deploy.yml pull
 docker compose -f compose.deploy.yml up -d
 ```
 
+Die `.env` gehört nicht ins Repo, existiert auf dem Server aber trotzdem — sie
+wird dort einmal von Hand angelegt. `.env.example` ist die Vorlage dafür; die
+Geheimnisse kommen getrennt dorthin (Passwortmanager, `scp`), nie über git.
+
 `IMAGE_TAG` in der `.env` bestimmt die Version. Zurückrollen heißt: alten Tag
 eintragen, Befehle wiederholen.
 
-> Für den echten Betrieb gehört ein TLS-Proxy davor (Caddy, Traefik, nginx).
-> Ohne HTTPS wandern Passwörter und Session-Cookies im Klartext durchs Netz.
+#### Ersten Administrator anlegen
+
+Migrationen laufen bei jedem Start von allein, der erste Benutzer nicht — auf
+einem frischen Server gibt es also zunächst kein einziges Konto. Dafür in der
+`.env` kurzzeitig die beiden Bootstrap-Zeilen eintragen (sie stehen
+auskommentiert in `.env.example`):
+
+```bash
+ADMIN_BOOTSTRAP_USERNAME=sysadmin
+ADMIN_BOOTSTRAP_PASSWORD=mindestens-12-zeichen
+```
+
+Dann einmalig einen Wegwerf-Container starten:
+
+```bash
+docker compose -f compose.deploy.yml run --rm api node dist/prisma/seed.js
+```
+
+Danach die beiden Zeilen wieder aus der `.env` entfernen und
+`docker compose -f compose.deploy.yml up -d` wiederholen — so stehen sie auch
+nicht mehr in der Umgebung des laufenden Containers. Zum Schluss unter
+`/profile` anmelden und das Passwort ändern.
+
+Zwei Stolpersteine dabei:
+
+- **`node dist/prisma/seed.js`, nicht `npx tsx prisma/seed.ts`.** Der Befehl aus
+  dem Schnellstart gilt nur für die Entwicklung — im Produktions-Image ist `tsx`
+  als Dev-Abhängigkeit entfernt.
+- **Der Seed ist kein Passwort-Reset.** Ein erneuter Lauf setzt bei einem
+  bestehenden Konto nur Rolle und Status, das Passwort bleibt unangetastet. Ein
+  vergessenes Admin-Passwort lässt sich nur noch von Hand in der Datenbank
+  ersetzen; ein zweites Administratorkonto erspart genau das.
+
+#### Vor dem Scharfschalten
+
+Sechs Dinge, die auf dem Server erledigt sein sollten — die ersten drei, bevor
+jemand anderes die Adresse bekommt:
+
+1. **TLS-Proxy davor und `APP_ORIGIN=https://…`.** Ohne HTTPS wandern Passwörter
+   und Session-Cookies im Klartext durchs Netz. Das `Secure`-Flag des Cookies
+   hängt an `APP_ORIGIN`, nicht an `NODE_ENV`.
+2. **`WEB_PORT=127.0.0.1:8080`.** Sonst veröffentlicht Docker den Port auf allen
+   Schnittstellen und die Seite ist am Proxy vorbei zusätzlich unverschlüsselt
+   erreichbar. Der Proxy spricht dann `127.0.0.1:8080` an.
+3. **`TRUST_PROXY` prüfen.** Der Standard `uniquelocal` passt für den üblichen
+   Aufbau: nginx im web-Dienst, davor ein TLS-Proxy auf demselben Rechner.
+   Stimmt der Wert nicht, sieht die API bei jedem Aufruf dieselbe Proxy-IP —
+   dann teilen sich **alle** Besucher ein Rate-Limit und sperren sich
+   gegenseitig aus (10 Loginversuche pro Minute für die ganze Seite).
+   Gegenprobe im Log: `docker compose -f compose.deploy.yml logs api` muss bei
+   `remoteAddress` die echte Besucher-IP zeigen, nicht `172.x.x.x`.
+4. **An der Registry anmelden.** Pakete auf ghcr sind standardmäßig privat, dann
+   scheitert `pull` mit „denied". Entweder beide Pakete auf GitHub öffentlich
+   stellen oder einmalig anmelden:
+   ```bash
+   echo <PAT mit read:packages> | docker login ghcr.io -u <GitHub-Name> --password-stdin
+   ```
+5. **Sicherung einrichten.** Alle Konten und Ergebnisse liegen im Volume
+   `postgres_data`; ein `down -v` löscht es. Ein nächtlicher Dump reicht — die
+   Zugangsdaten holt sich der Befehl aus dem Container, damit er auch nach einem
+   Wechsel von `POSTGRES_USER`/`POSTGRES_DB` noch stimmt:
+   ```bash
+   docker compose -f compose.deploy.yml exec -T db \r
+     sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' | gzip > "sicherung-$(date +%F).sql.gz"
+   ```
+   Zurückspielen:
+   ```bash
+   gunzip -c sicherung-2026-09-11.sql.gz | docker compose -f compose.deploy.yml exec -T db \r
+     sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+   ```
+6. **Zweites Administratorkonto anlegen**, solange du angemeldet bist. Der Seed
+   setzt kein bestehendes Passwort zurück — ohne zweiten Zugang wäre ein
+   vergessenes Admin-Passwort nur noch von Hand in der Datenbank zu ersetzen.
 
 ---
 

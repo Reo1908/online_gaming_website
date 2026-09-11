@@ -1,23 +1,215 @@
-.platzhalter {
-  /* Der Platzhalter ist der einzige Inhalt der Seite. Ohne diese Hoehe
-     klebte er direkt unter der Kopfzeile und die Seite wirkte kaputt. */
-  min-height: 60vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
+.start {
+  padding-block: 3rem 2.5rem;
+  max-width: 34rem;
 
+  h1 {
+    font-size: clamp(2rem, 6vw, 2.75rem);
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    margin: 0 0 0.75rem;
+  }
+}
+
+.untertitel {
+  margin: 0 0 2rem;
+  color: var(--p-text-muted-color);
+  line-height: 1.6;
+}
+
+.einstieg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.offen {
   h2 {
     font-size: 0.8125rem;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: var(--p-text-muted-color);
-    margin: 0 0 0.5rem;
+    margin: 0 0 0.75rem;
+  }
+}
+
+.partien {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+/* Die ganze Zeile ist der Knopf: ein kleiner "Öffnen"-Link daneben waere auf
+   dem Handy kaum zu treffen. */
+.partie {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.875rem 1rem;
+  border: 1px solid var(--p-surface-200);
+  border-radius: 10px;
+  background: var(--p-surface-0);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--p-primary-color);
   }
 
-  p {
-    margin: 0;
+  i {
     color: var(--p-text-muted-color);
   }
+}
+
+.partie-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  background: var(--p-surface-100);
+}
+
+.partie-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  margin-right: auto;
+}
+
+.partie-meta {
+  font-size: 0.8125rem;
+  color: var(--p-text-muted-color);
+}
+
+.dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.feld {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+
+  label {
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+
+  small {
+    font-size: 0.75rem;
+    color: var(--p-text-muted-color);
+  }
+
+  input {
+    width: 100%;
+  }
+}
+
+fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.5rem;
+
+  legend {
+    font-size: 0.875rem;
+    font-weight: 500;
+    padding: 0;
+    margin-bottom: 0.5rem;
+  }
+}
+
+.optionen {
+  gap: 1rem;
+}
+
+/* Die Spielauswahl ist der erste Schritt im Dialog und darf deshalb Platz
+   nehmen: Name und Beschreibung stehen vollstaendig da, nichts wird gekuerzt. */
+.spiel {
+  display: grid;
+  gap: 0.25rem;
+  width: 100%;
+  padding: 0.875rem 1rem;
+  border: 1px solid var(--p-surface-200);
+  border-radius: 10px;
+  background: var(--p-surface-0);
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--p-surface-400);
+  }
+
+  &.aktiv {
+    border-color: var(--p-primary-color);
+    box-shadow: inset 0 0 0 1px var(--p-primary-color);
+  }
+}
+
+.spiel-name {
+  font-weight: 600;
+}
+
+.spiel-text {
+  font-size: 0.8125rem;
+  color: var(--p-text-muted-color);
+  line-height: 1.5;
+}
+
+.spiel-zahl {
+  font-size: 0.75rem;
+  color: var(--p-text-muted-color);
+}
+
+.schalter {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  cursor: pointer;
+
+  input {
+    margin-top: 0.2rem;
+    accent-color: var(--p-primary-color);
+  }
+
+  span {
+    display: grid;
+    gap: 0.125rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+
+  small {
+    font-weight: 400;
+    font-size: 0.75rem;
+    color: var(--p-text-muted-color);
+  }
+}
+
+.code-eingabe {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.25rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+}
+
+.dialog-aktionen {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+:host ::ng-deep .voll {
+  width: 100%;
 }

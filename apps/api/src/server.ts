@@ -4,13 +4,20 @@ import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import { env, isProduction } from './lib/env.js';
 import { prisma } from './lib/prisma.js';
+import { purgeExpiredSessions } from './lib/session.js';
+import { realtimeStarten } from './lib/realtime.js';
+import { spielartenSicherstellen } from './lib/spiele.js';
 import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './routes/auth.js';
 import { leaderboardRoutes } from './routes/leaderboard.js';
 import { adminRoutes } from './routes/admin.js';
 import { supportRoutes } from './routes/support.js';
+import { matchRoutes } from './routes/matches.js';
 
 const app = Fastify({
+  // Siehe TRUST_PROXY in lib/env.ts: entscheidet, welche Adresse als die des
+  // Clients gilt -- und damit, worauf das Rate-Limit schluesselt.
+  trustProxy: env.TRUST_PROXY,
   logger: isProduction
     ? true
     : { transport: { target: 'pino-pretty', options: { translateTime: 'HH:MM:ss', ignore: 'pid,hostname' } } },
@@ -34,6 +41,7 @@ async function build() {
   await app.register(healthRoutes);
   await app.register(authRoutes);
   await app.register(leaderboardRoutes);
+  await app.register(matchRoutes);
   await app.register(adminRoutes);
   await app.register(supportRoutes);
 
@@ -53,9 +61,36 @@ async function build() {
   return app;
 }
 
+/** Alle sechs Stunden; beim Start einmal sofort. */
+const PURGE_INTERVAL_MS = 1000 * 60 * 60 * 6;
+
+async function purgeSessions() {
+  try {
+    const entfernt = await purgeExpiredSessions();
+    if (entfernt > 0) app.log.info(`${entfernt} abgelaufene Sitzungen entfernt`);
+  } catch (error) {
+    // Aufraeumen ist Nebensache: ein Fehler darf den Betrieb nicht stoeren.
+    app.log.warn({ err: error }, 'Aufraeumen der Sitzungen fehlgeschlagen');
+  }
+}
+
 async function start() {
   await build();
+
+  // Die Spielarten stehen im Quelltext; die Tabelle wird daraus abgeglichen,
+  // damit auf einem frischen Server niemand Spiele von Hand anlegen muss.
+  await spielartenSicherstellen();
+
+  // Haengt sich an denselben HTTP-Server -- danach darf nichts mehr an den
+  // Routen geaendert werden, deshalb erst nach build().
+  realtimeStarten(app);
+
   await app.listen({ port: env.PORT, host: '0.0.0.0' });
+
+  await purgeSessions();
+  // unref(): der Zeitgeber soll den Prozess beim Herunterfahren nicht
+  // kuenstlich am Leben halten.
+  setInterval(() => void purgeSessions(), PURGE_INTERVAL_MS).unref();
 }
 
 // Ohne sauberes Schliessen bleiben beim Neustart im Watch-Modus

@@ -17,6 +17,14 @@ export const routes: Routes = [
     title: 'Anmelden',
   },
   {
+    // Der Code steht in der Adresse, damit ein Neuladen zurueck in dieselbe
+    // Partie fuehrt und sich der Link weitergeben laesst.
+    path: 'partie/:code',
+    canActivate: [authGuard],
+    loadComponent: () => import('./pages/partie/partie').then((m) => m.Partie),
+    title: 'Partie',
+  },
+  {
     path: 'leaderboard',
     canActivate: [authGuard],
     loadComponent: () => import('./pages/leaderboard/leaderboard').then((m) => m.Leaderboard),

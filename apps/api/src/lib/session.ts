@@ -78,6 +78,20 @@ export async function resolveSession(token: string): Promise<SessionUser | null>
   };
 }
 
+/**
+ * Entfernt abgelaufene Sitzungen.
+ *
+ * `resolveSession` raeumt nur auf, was noch einmal angefasst wird. Wer sein
+ * Geraet nie wieder benutzt, hinterlaesst sonst eine Zeile, die niemand mehr
+ * loescht -- die Tabelle waechst dann mit jeder Anmeldung dauerhaft mit.
+ */
+export async function purgeExpiredSessions(): Promise<number> {
+  const { count } = await prisma.session.deleteMany({
+    where: { expiresAt: { lte: new Date() } },
+  });
+  return count;
+}
+
 export async function destroySession(token: string): Promise<void> {
   await prisma.session.deleteMany({ where: { id: hashToken(token) } });
 }

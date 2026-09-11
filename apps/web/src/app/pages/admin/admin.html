@@ -81,6 +81,14 @@
         </select>
         <small>Administratoren dürfen Benutzer verwalten</small>
       </div>
+
+      <div class="field ankreuz">
+        <label class="checkbox">
+          <input type="checkbox" formControlName="isVisible" />
+          <span>In der Rangliste zeigen</span>
+        </label>
+        <small>Verborgene Konten spielen mit, tauchen aber in keiner Platzierung auf</small>
+      </div>
     </div>
 
     <p-button
@@ -135,6 +143,7 @@
           <th>Anzeigename</th>
           <th>Rolle</th>
           <th>Status</th>
+          <th>Rangliste</th>
           <th>Angelegt</th>
           <th class="actions-col">Aktionen</th>
         </tr>
@@ -152,6 +161,7 @@
             <span class="tag" [class.is-admin]="user.role === 'ADMIN'">{{ user.role }}</span>
           </td>
           <td>{{ user.isActive ? 'Aktiv' : 'Deaktiviert' }}</td>
+          <td>{{ user.isVisible ? 'Sichtbar' : 'Verborgen' }}</td>
           <td>{{ user.createdAt | date: 'dd.MM.yyyy HH:mm' }}</td>
           <td class="actions-col">
             <div class="actions">
@@ -239,6 +249,17 @@
         } @else {
           <small>Deaktivierte Benutzer können sich nicht anmelden</small>
         }
+      </div>
+
+      <div class="field">
+        <label class="checkbox">
+          <input type="checkbox" formControlName="isVisible" />
+          <span>In der Rangliste zeigen</span>
+        </label>
+        <small>
+          Ohne Haken taucht das Konto in keiner Platzierung auf — anmelden und mitspielen
+          geht weiterhin.
+        </small>
       </div>
 
       <div class="field">

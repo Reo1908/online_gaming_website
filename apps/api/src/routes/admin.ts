@@ -17,6 +17,7 @@ const PUBLIC_USER_FIELDS = {
   displayName: true,
   role: true,
   isActive: true,
+  isVisible: true,
   createdAt: true,
 } as const;
 
@@ -30,6 +31,9 @@ const createUserSchema = z.object({
   displayName: z.string().trim().min(1).max(64),
   password: z.string().min(12, 'Passwort muss mindestens 12 Zeichen haben').max(256),
   role: z.enum(['ADMIN', 'PLAYER']).default('PLAYER'),
+  // Standard ist sichtbar: ein neues Konto soll in der Rangliste auftauchen,
+  // ohne dass daran gedacht werden muss.
+  isVisible: z.boolean().default(true),
 });
 
 const usernameField = z
@@ -52,6 +56,7 @@ const updateUserSchema = z
     displayName: z.string().trim().min(1).max(64).optional(),
     role: z.enum(['ADMIN', 'PLAYER']).optional(),
     isActive: z.boolean().optional(),
+    isVisible: z.boolean().optional(),
     password: z.string().min(12, 'Passwort muss mindestens 12 Zeichen haben').max(256).optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
@@ -148,7 +153,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    const { username, displayName, password, role } = parsed.data;
+    const { username, displayName, password, role, isVisible } = parsed.data;
 
     try {
       const actor = request.user!;
@@ -159,6 +164,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
             displayName,
             passwordHash: await hashPassword(password),
             role,
+            isVisible,
           },
           select: PUBLIC_USER_FIELDS,
         });
@@ -247,9 +253,9 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
 
         // Je geaendertem Feld ein Eintrag, damit sich der Verlauf einer
         // einzelnen Eigenschaft spaeter herausfiltern laesst.
-        const geaendert = (['username', 'displayName', 'role', 'isActive'] as const).filter(
-          (feld) => vorher[feld] !== updated[feld],
-        );
+        const geaendert = (
+          ['username', 'displayName', 'role', 'isActive', 'isVisible'] as const
+        ).filter((feld) => vorher[feld] !== updated[feld]);
 
         await protokolliereMehrere(
           geaendert.map((feld) => ({

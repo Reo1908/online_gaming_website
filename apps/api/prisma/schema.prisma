@@ -48,6 +48,10 @@ model User {
   passwordHash String
   role         Role      @default(PLAYER)
   isActive     Boolean   @default(true)
+  /// Steuert allein die Sichtbarkeit in der Rangliste. Ein verborgener
+  /// Spieler kann sich weiterhin anmelden und mitspielen -- gedacht fuer
+  /// Test- und Verwaltungskonten, die die Wertung nicht verfaelschen sollen.
+  isVisible    Boolean   @default(true)
   createdAt    DateTime  @default(now())
 
   sessions       Session[]
@@ -95,9 +99,19 @@ model Game {
 /// Eine konkrete Partie: von der Lobby bis zum Ergebnis.
 model Match {
   id       String      @id @default(uuid())
+  /// Beitrittscode, den die Mitspieler eintippen. Kurz und ohne
+  /// verwechselbare Zeichen, weil er oft vorgelesen wird.
+  code     String      @unique
+  /// Frei vergebener Name, damit sich mehrere Partien unterscheiden lassen.
+  name     String
   gameId   String
   game     Game        @relation(fields: [gameId], references: [id], onDelete: Restrict)
   status   MatchStatus @default(LOBBY)
+
+  /// Spielabhaengige Einstellungen, beim Anlegen festgelegt und danach fest.
+  /// Als JSON, weil jede Spielart andere Schalter mitbringt -- eine Spalte je
+  /// Einstellung waere bei der zweiten Spielart schon nicht mehr zu halten.
+  settings Json        @default("{}")
 
   /// Wer die Lobby geoeffnet hat. Optional, damit eine Partie das Loeschen
   /// des Erstellers ueberlebt -- die Historie der Mitspieler bleibt so intakt.
@@ -133,6 +147,10 @@ model MatchPlayer {
   score  Int?
   /// Platzierung ab 1. Bei zwei Spielern redundant, bei mehr nicht.
   placement Int?
+
+  /// Die Spielleitung: vergibt Punkte, startet und beendet die Partie. Sie
+  /// spielt nicht mit und taucht deshalb in keiner Wertung auf.
+  isGamemaster Boolean @default(false)
 
   joinedAt DateTime @default(now())
 

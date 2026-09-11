@@ -1,0 +1,295 @@
+@if (laedt()) {
+  <p class="muted">Wird geladen …</p>
+} @else {
+  @if (fehler(); as meldung) {
+    <p-message severity="error" [text]="meldung" styleClass="voll" />
+  }
+  @if (hinweis(); as meldung) {
+    <p-message severity="success" [text]="meldung" styleClass="voll" />
+  }
+
+  @if (partie(); as p) {
+    <header class="kopf">
+      <div>
+        <h1>{{ p.name }}</h1>
+        <p class="meta">
+          {{ p.spiel.name }}
+          @if (leitung(); as l) {
+            · Leitung: {{ l.displayName }}
+          }
+        </p>
+      </div>
+
+      @if (status() === 'RUNNING' && !binLeitung()) {
+        <div class="punktestand">
+          <span class="zahl">{{ ich()?.punkte ?? 0 }}</span>
+          <span class="wort">Punkte</span>
+        </div>
+      }
+    </header>
+
+    <!-- Noch nicht dabei: erst beitreten, dann geht es weiter. -->
+    @if (!binDabei()) {
+      <section class="karte">
+        <h2>Du bist noch nicht dabei</h2>
+        <p class="muted">
+          {{ p.teilnehmer.length }} warten schon. Tritt bei, dann siehst du die Runde live.
+        </p>
+        <p-button label="Beitreten" [loading]="busy()" (onClick)="beitreten()" />
+      </section>
+    } @else if (status() === 'LOBBY') {
+      <!-- ============ Wartende Lobby ============ -->
+      <section class="code-platte">
+        <p class="code-hinweis">Code weitergeben</p>
+        <p class="code" [attr.aria-label]="'Beitrittscode ' + p.code">{{ p.code }}</p>
+
+        <button type="button" class="code-kopieren" (click)="codeKopieren()">
+          <i class="pi" [class.pi-copy]="!codeKopiert()" [class.pi-check]="codeKopiert()"></i>
+          {{ codeKopiert() ? 'Kopiert' : 'Code kopieren' }}
+        </button>
+      </section>
+
+      <div class="spalten">
+        <section class="karte">
+          <h2>Wer ist da ({{ teilnehmer().length }})</h2>
+
+          <ul class="leute">
+            @for (t of teilnehmer(); track t.userId) {
+              <li>
+                <span class="punkt" [class.an]="t.verbunden" aria-hidden="true"></span>
+                <span class="name">{{ t.displayName }}</span>
+                @if (t.istLeitung) {
+                  <span class="rolle">Leitung</span>
+                }
+              </li>
+            }
+          </ul>
+
+          @if (spieler().length === 0) {
+            <p class="muted klein">Sobald jemand den Code eintippt, taucht er hier auf.</p>
+          }
+        </section>
+
+        <section class="karte">
+          <h2>Einstellungen</h2>
+          <dl class="werte">
+            <div>
+              <dt>Punkte pro Treffer</dt>
+              <dd>{{ einstellungen().punkteProTreffer }}</dd>
+            </div>
+            <div>
+              <dt>Buzzern</dt>
+              <dd>{{ einstellungen().nurEinmalBuzzern ? 'einmal je Runde' : 'beliebig oft' }}</dd>
+            </div>
+            <div>
+              <dt>Antworten</dt>
+              <dd>{{ einstellungen().antwortenOeffentlich ? 'für alle sichtbar' : 'nur für die Leitung' }}</dd>
+            </div>
+          </dl>
+        </section>
+      </div>
+
+      <div class="aktionen">
+        @if (binLeitung()) {
+          <p-button
+            label="Partie starten"
+            size="large"
+            [loading]="busy()"
+            [disabled]="spieler().length === 0"
+            (onClick)="starten()"
+          />
+          <p-button
+            label="Lobby schließen"
+            severity="danger"
+            [text]="true"
+            (onClick)="abbrechen()"
+          />
+        } @else {
+          <p class="warten">
+            <i class="pi pi-hourglass" aria-hidden="true"></i>
+            Warten auf die Spielleitung
+          </p>
+          <p-button label="Lobby verlassen" severity="secondary" [text]="true" (onClick)="verlassen()" />
+        }
+      </div>
+    } @else if (status() === 'RUNNING') {
+      <!-- ============ Laufende Partie ============ -->
+      @if (!verbunden()) {
+        <p-message severity="warn" text="Live-Verbindung unterbrochen — es wird neu verbunden." styleClass="voll" />
+      }
+
+      @if (binLeitung()) {
+        <!-- ----- Sicht der Spielleitung ----- -->
+        <section class="leitpult">
+          <div class="runde">
+            <span class="runde-zahl">Runde {{ runde().nummer || 1 }}</span>
+            <span class="runde-status" [class.live]="runde().laeuft">
+              {{ runde().laeuft ? 'Buzzer offen' : 'Buzzer gesperrt' }}
+            </span>
+          </div>
+
+          <div class="runde-knoepfe">
+            <p-button
+              [label]="runde().nummer === 0 ? 'Erste Runde freigeben' : 'Nächste Runde freigeben'"
+              icon="pi pi-play"
+              (onClick)="rundeStarten()"
+            />
+            <p-button
+              label="Buzzer sperren"
+              icon="pi pi-pause"
+              severity="secondary"
+              [outlined]="true"
+              [disabled]="!runde().laeuft"
+              (onClick)="rundeStoppen()"
+            />
+          </div>
+        </section>
+
+        <section class="karte">
+          <h2>Mitspieler</h2>
+
+          <ul class="spielerliste">
+            @for (t of spieler(); track t.userId) {
+              <li class="spielerzeile" [class.gebuzzert]="t.buzzerPlatz === 1">
+                <div class="spieler-kopf">
+                  @if (t.buzzerPlatz) {
+                    <span class="platz">{{ t.buzzerPlatz }}</span>
+                  } @else {
+                    <span class="platz leer" aria-hidden="true"></span>
+                  }
+
+                  <span class="name">
+                    {{ t.displayName }}
+                    @if (!t.verbunden) {
+                      <span class="weg">offline</span>
+                    }
+                  </span>
+
+                  @if (t.gebuzzertUm !== null) {
+                    <span class="zeit">{{ sekunden(t.gebuzzertUm) }}</span>
+                  }
+
+                  <span class="punkte">{{ t.punkte }}</span>
+
+                  <span class="punkt-knoepfe">
+                    <button
+                      type="button"
+                      (click)="punkte(t.userId, -1)"
+                      [attr.aria-label]="einstellungen().punkteProTreffer + ' Punkte abziehen bei ' + t.displayName"
+                    >
+                      −
+                    </button>
+                    <button
+                      type="button"
+                      class="plus"
+                      (click)="punkte(t.userId, 1)"
+                      [attr.aria-label]="einstellungen().punkteProTreffer + ' Punkte geben an ' + t.displayName"
+                    >
+                      +
+                    </button>
+                  </span>
+                </div>
+
+                <p class="antwort" [class.leer]="!t.text">
+                  {{ t.text ? t.text : 'noch nichts getippt' }}
+                </p>
+              </li>
+            }
+          </ul>
+        </section>
+
+        <div class="aktionen">
+          <p-button label="Partie beenden" [loading]="busy()" (onClick)="beenden()" />
+          <p-button label="Abbrechen ohne Wertung" severity="danger" [text]="true" (onClick)="abbrechen()" />
+        </div>
+      } @else {
+        <!-- ----- Sicht der Mitspieler ----- -->
+        <section class="buzzer-flaeche">
+          <button
+            type="button"
+            class="buzzer"
+            [class.bereit]="darfBuzzern()"
+            [disabled]="!darfBuzzern()"
+            (click)="buzzern()"
+          >
+            @if (ich()?.buzzerPlatz) {
+              <span class="buzzer-platz">{{ ich()?.buzzerPlatz }}.</span>
+              <span class="buzzer-zeit">{{ sekunden(ich()?.gebuzzertUm ?? null) }}</span>
+            } @else if (runde().laeuft) {
+              <span class="buzzer-wort">Buzzer</span>
+              <span class="buzzer-zeit">Leertaste</span>
+            } @else {
+              <span class="buzzer-wort">Gesperrt</span>
+              <span class="buzzer-zeit">Runde läuft nicht</span>
+            }
+          </button>
+        </section>
+
+        <section class="karte">
+          <h2>Deine Antwort</h2>
+          <input
+            type="text"
+            class="antwort-feld"
+            maxlength="200"
+            autocomplete="off"
+            placeholder="Tippen — die Spielleitung liest live mit"
+            [value]="eigenerText()"
+            (input)="textTippen($any($event.target).value)"
+          />
+        </section>
+
+        @if (amBuzzer().length > 0) {
+          <section class="karte">
+            <h2>Am Buzzer</h2>
+            <ol class="buzzerliste">
+              @for (t of amBuzzer(); track t.userId) {
+                <li>
+                  <span class="platz">{{ t.buzzerPlatz }}</span>
+                  <span class="name">{{ t.userId === ich()?.userId ? 'Du' : t.displayName }}</span>
+                  <span class="zeit">{{ sekunden(t.gebuzzertUm) }}</span>
+                </li>
+              }
+            </ol>
+          </section>
+        }
+
+        <section class="karte">
+          <h2>Punkte</h2>
+          <ul class="leute">
+            @for (t of rangliste(); track t.userId) {
+              <li>
+                <span class="punkt" [class.an]="t.verbunden" aria-hidden="true"></span>
+                <span class="name">{{ t.displayName }}</span>
+                <span class="punkte">{{ t.punkte }}</span>
+              </li>
+            }
+          </ul>
+        </section>
+      }
+    } @else {
+      <!-- ============ Vorbei ============ -->
+      <section class="karte">
+        <h2>{{ status() === 'FINISHED' ? 'Endstand' : 'Abgebrochen' }}</h2>
+
+        @if (status() === 'ABORTED') {
+          <p class="muted">Die Partie wurde abgebrochen und zählt für keine Statistik.</p>
+        } @else {
+          <ol class="endstand">
+            @for (t of endstand(); track t.userId) {
+              <li>
+                <span class="platz">{{ t.platz ?? $index + 1 }}</span>
+                <span class="name">{{ t.displayName }}</span>
+                <span class="punkte">{{ t.punkte }}</span>
+              </li>
+            }
+          </ol>
+        }
+
+        <div class="aktionen">
+          <p-button label="Zur Startseite" severity="secondary" [outlined]="true" (onClick)="zurStartseite()" />
+          <p-button label="Rangliste ansehen" [text]="true" (onClick)="zurRangliste()" />
+        </div>
+      </section>
+    }
+  }
+}

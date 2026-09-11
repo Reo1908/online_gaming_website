@@ -51,6 +51,7 @@ export async function supportRoutes(app: FastifyInstance): Promise<void> {
         displayName: true,
         role: true,
         isActive: true,
+        isVisible: true,
         createdAt: true,
         overallStat: {
           select: {

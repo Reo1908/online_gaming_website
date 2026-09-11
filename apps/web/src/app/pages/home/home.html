@@ -1,4 +1,173 @@
-<section class="platzhalter">
-  <h2>Demnächst</h2>
-  <p>Hier entstehen die Spiele. Noch ist es ruhig.</p>
+<section class="start">
+  <h1>Spielt zusammen.</h1>
+  <p class="untertitel">
+    Eine Lobby öffnen, den Code weitergeben, losspielen. Die Spielleitung stellt die Fragen,
+    alle anderen buzzern.
+  </p>
+
+  <div class="einstieg">
+    <p-button label="Lobby erstellen" icon="pi pi-plus" size="large" (onClick)="anlegenOeffnen()" />
+    <p-button
+      label="Mit Code beitreten"
+      icon="pi pi-sign-in"
+      severity="secondary"
+      [outlined]="true"
+      size="large"
+      (onClick)="dialogFehler.set(null); beitretenForm.reset(); beitretenOffen.set(true)"
+    />
+  </div>
+
+  @if (fehler(); as meldung) {
+    <p-message severity="error" [text]="meldung" />
+  }
 </section>
+
+@if (laufende().length > 0) {
+  <section class="offen">
+    <h2>Du bist dabei</h2>
+
+    <ul class="partien">
+      @for (partie of laufende(); track partie.id) {
+        <li>
+          <button type="button" class="partie" (click)="oeffnen(partie)">
+            <span class="partie-code">{{ partie.code }}</span>
+            <span class="partie-text">
+              <strong>{{ partie.name }}</strong>
+              <span class="partie-meta">
+                {{ partie.spiel.name }} ·
+                {{ partie.status === 'LOBBY' ? 'wartet auf Mitspieler' : 'läuft' }} ·
+                {{ partie.teilnehmer.length }} dabei
+              </span>
+            </span>
+            <i class="pi pi-angle-right" aria-hidden="true"></i>
+          </button>
+        </li>
+      }
+    </ul>
+  </section>
+}
+
+<!-- Lobby erstellen -->
+<p-dialog
+  [visible]="anlegenOffen()"
+  (visibleChange)="$event || anlegenOffen.set(false)"
+  [modal]="true"
+  [draggable]="false"
+  [style]="{ width: '32rem' }"
+  header="Lobby erstellen"
+>
+  <form [formGroup]="anlegenForm" (ngSubmit)="anlegen()" novalidate class="dialog-form">
+    @if (dialogFehler(); as meldung) {
+      <p-message severity="error" [text]="meldung" styleClass="voll" />
+    }
+
+    <fieldset class="spiele">
+      <legend>Spiel</legend>
+
+      @for (art of spielarten(); track art.slug) {
+        <button
+          type="button"
+          class="spiel"
+          [class.aktiv]="istGewaehlt(art.slug)"
+          [attr.aria-pressed]="istGewaehlt(art.slug)"
+          (click)="artWaehlen(art.slug)"
+        >
+          <span class="spiel-name">{{ art.name }}</span>
+          <span class="spiel-text">{{ art.description }}</span>
+          <span class="spiel-zahl">{{ art.minPlayers }}–{{ art.maxPlayers }} Mitspieler</span>
+        </button>
+      }
+    </fieldset>
+
+    <div class="feld">
+      <label for="partieName">Name der Runde</label>
+      <input
+        pInputText
+        id="partieName"
+        formControlName="name"
+        autocomplete="off"
+        placeholder="Freitagsrunde"
+      />
+    </div>
+
+    @if (gewaehlteArt(); as art) {
+      <fieldset class="optionen">
+        <legend>Einstellungen</legend>
+
+        <div class="feld">
+          <label for="punkte">Punkte pro Treffer</label>
+          <input pInputText id="punkte" type="number" min="1" max="100" formControlName="punkteProTreffer" />
+          <small>So viel vergibt ein Klick auf „+" im Spiel</small>
+        </div>
+
+        <label class="schalter">
+          <input type="checkbox" formControlName="nurEinmalBuzzern" />
+          <span>
+            Nur einmal buzzern je Runde
+            <small>Wer gedrückt hat, ist bis zur nächsten Frage raus</small>
+          </span>
+        </label>
+
+        <label class="schalter">
+          <input type="checkbox" formControlName="antwortenOeffentlich" />
+          <span>
+            Antworten für alle sichtbar
+            <small>Ohne Haken sieht nur die Spielleitung, was getippt wird</small>
+          </span>
+        </label>
+      </fieldset>
+    }
+
+    <div class="dialog-aktionen">
+      <p-button
+        label="Abbrechen"
+        severity="secondary"
+        [text]="true"
+        (onClick)="anlegenOffen.set(false)"
+      />
+      <p-button type="submit" label="Lobby öffnen" [loading]="busy()" [disabled]="anlegenForm.invalid" />
+    </div>
+  </form>
+</p-dialog>
+
+<!-- Beitreten -->
+<p-dialog
+  [visible]="beitretenOffen()"
+  (visibleChange)="$event || beitretenOffen.set(false)"
+  [modal]="true"
+  [draggable]="false"
+  [style]="{ width: '24rem' }"
+  header="Mit Code beitreten"
+>
+  <form [formGroup]="beitretenForm" (ngSubmit)="beitreten()" novalidate class="dialog-form">
+    @if (dialogFehler(); as meldung) {
+      <p-message severity="error" [text]="meldung" styleClass="voll" />
+    }
+
+    <div class="feld">
+      <label for="code">Beitrittscode</label>
+      <input
+        pInputText
+        id="code"
+        formControlName="code"
+        class="code-eingabe"
+        autocomplete="off"
+        autocapitalize="characters"
+        spellcheck="false"
+        maxlength="6"
+        placeholder="A2B4C6"
+      />
+      <small>Sechs Zeichen, die dir die Spielleitung durchgibt</small>
+    </div>
+
+    <div class="dialog-aktionen">
+      <p-button
+        label="Abbrechen"
+        severity="secondary"
+        [text]="true"
+        (onClick)="beitretenOffen.set(false)"
+      />
+      <p-button type="submit" label="Beitreten" [loading]="busy()" [disabled]="beitretenForm.invalid" />
+    </div>
+  </form>
+</p-dialog>

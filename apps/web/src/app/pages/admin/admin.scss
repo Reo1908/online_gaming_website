@@ -124,6 +124,12 @@ tr.inaktiv td {
   margin-top: 1.25rem;
 }
 
+/* Ankreuzfeld im Eingabe-Raster: rueckt auf die Hoehe der Eingabefelder
+   daneben, statt oben an der Zellenkante zu kleben. */
+.field.ankreuz {
+  justify-content: center;
+}
+
 .checkbox {
   display: flex;
   align-items: center;
