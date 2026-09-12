@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from './prisma.js';
+import { spielart } from '../games/index.js';
 import type { PartieInfo } from '../games/index.js';
 
 /**
@@ -142,10 +143,17 @@ export async function woerterZurPartie(code: string): Promise<string[]> {
  * Gewertet wird, wer mitspielt -- die Buzzer-Spielleitung also nicht. Und
  * gewertet wird erst ab zwei Mitspielenden: sonst gewaenne ein einzelner
  * Spieler jede Partie gegen sich selbst und die Rangliste waere nichts wert.
+ *
+ * Zwei Wertungen, je nach Spielart: Im Wettkampf gewinnt die hoechste
+ * Punktzahl. Bei einer Spielart mit `gemeinsameWertung` bekommen alle
+ * dasselbe -- dort haben ohnehin alle dieselben Punkte, und die Frage ist
+ * nicht, wer vorn liegt, sondern ob die Runde es geschafft hat. Ohne Angabe
+ * (die Leitung pfeift von Hand ab) steht es fuer alle unentschieden.
  */
 export async function ergebnisseFestschreiben(
   tx: Prisma.TransactionClient,
   partieId: string,
+  gemeinsam?: { erfolg: boolean | undefined },
 ): Promise<{ gewertet: boolean }> {
   const spieler = await tx.matchPlayer.findMany({
     where: { matchId: partieId, isPlaying: true },
@@ -159,9 +167,18 @@ export async function ergebnisseFestschreiben(
   // Gleichstand an der Spitze ist ein Unentschieden fuer alle Beteiligten.
   const anDerSpitze = sortiert.filter((s) => (s.score ?? 0) === hoechste).length;
 
+  const zusammen = gemeinsam
+    ? gemeinsam.erfolg === undefined
+      ? ('DRAW' as const)
+      : gemeinsam.erfolg
+        ? ('WIN' as const)
+        : ('LOSS' as const)
+    : null;
+
   for (const eintrag of sortiert) {
     const punkte = eintrag.score ?? 0;
-    const ergebnis = punkte === hoechste ? (anDerSpitze > 1 ? 'DRAW' : 'WIN') : 'LOSS';
+    const ergebnis =
+      zusammen ?? (punkte === hoechste ? (anDerSpitze > 1 ? 'DRAW' : 'WIN') : 'LOSS');
 
     // Gleiche Punktzahl, gleicher Platz -- sonst entscheidet die Sortierung
     // willkuerlich, wer von zwei Gleichstehenden vorn liegt.
@@ -196,9 +213,10 @@ export async function ergebnisseFestschreiben(
 /**
  * Beendet eine laufende Partie regulaer.
  *
- * Zwei Wege fuehren hierher: die Spielleitung beim Buzzer, die von Hand
- * abpfeift, und Scribble, das nach der letzten Runde von selbst ankommt.
- * Deshalb liegt der Ablauf hier und nicht in der Route.
+ * Drei Wege fuehren hierher: die Spielleitung beim Buzzer, die von Hand
+ * abpfeift, Scribble, das nach der letzten Runde von selbst ankommt, und der
+ * Ausbruch, der am Ende sagt, ob die Runde draussen ist. Deshalb liegt der
+ * Ablauf hier und nicht in der Route.
  *
  * Absichtlich ohne Socket-Aufruf: Wer die Partie schliesst, schickt danach
  * selbst. Sonst muessten sich diese Datei und die Socket-Schicht gegenseitig
@@ -206,14 +224,26 @@ export async function ergebnisseFestschreiben(
  */
 export async function partieAbschliessen(
   code: string,
+  erfolg?: boolean,
 ): Promise<{ partie: PartieRoh; gewertet: boolean } | null> {
   return prisma.$transaction(async (tx) => {
-    const aktuell = await tx.match.findUnique({ where: { code }, select: { id: true, status: true } });
+    const aktuell = await tx.match.findUnique({
+      where: { code },
+      select: { id: true, status: true, game: { select: { slug: true } } },
+    });
     // Schon vorbei -- etwa weil die Leitung eine Sekunde vor der letzten Runde
     // abgebrochen hat. Kein Fehler, nur nichts mehr zu tun.
     if (!aktuell || aktuell.status !== 'RUNNING') return null;
 
-    const { gewertet } = await ergebnisseFestschreiben(tx, aktuell.id);
+    // Ob gemeinsam gewertet wird, sagt die Spielart -- nicht der Aufrufer.
+    // Sonst haenge es davon ab, ueber welchen der drei Wege die Partie endet.
+    const zusammen = spielart(aktuell.game.slug)?.gemeinsameWertung === true;
+
+    const { gewertet } = await ergebnisseFestschreiben(
+      tx,
+      aktuell.id,
+      zusammen ? { erfolg } : undefined,
+    );
 
     await tx.match.update({
       where: { id: aktuell.id },

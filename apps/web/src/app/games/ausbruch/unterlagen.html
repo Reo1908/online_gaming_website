@@ -1,0 +1,114 @@
+<!-- Kabelregeln: Die Nummer ist wichtiger als der Text. Die erste, die zutrifft, gilt. -->
+@if (kabel(); as u) {
+  <div class="blatt">
+    <p class="blatt-kopf">
+      Deine Regeln — geprüft wird <strong>der Reihe nach</strong>, von 1 bis {{ u.gesamt }}.
+      Die restlichen liegen bei den anderen.
+      @if (u.modul) {
+        Am Kasten steht außerdem eine <strong>Modulnummer</strong> — frag danach, wenn eine
+        Regel sie braucht.
+      }
+    </p>
+
+    <ul class="regeln">
+      @for (r of u.regeln; track r.nr) {
+        <li>
+          <span class="regel-nr">{{ r.nr }}</span>
+          <span class="regel-text">{{ r.text }}</span>
+        </li>
+      }
+    </ul>
+  </div>
+}
+
+<!-- Symbolspalten: genau eine Spalte im ganzen Raum enthält alle Tasten. -->
+@if (symbole(); as u) {
+  <div class="blatt">
+    <p class="blatt-kopf">
+      Eine einzige Spalte — von {{ u.gesamt }} im Raum — enthält alle Zeichen des Schlosses.
+      In ihrer Reihenfolge wird gedrückt, von oben nach unten.
+    </p>
+
+    <div class="spalten">
+      @for (s of u.spalten; track s.nr) {
+        <div class="spalte">
+          <span class="spalte-nr">Spalte {{ s.nr }}</span>
+          <ol>
+            @for (z of s.symbole; track $index) {
+              <li>{{ z }}</li>
+            }
+          </ol>
+        </div>
+      }
+    </div>
+  </div>
+}
+
+<!-- Kartenstreifen: nur die eigenen Zeilen tragen Wände. -->
+@if (schacht(); as u) {
+  <div class="blatt">
+    <p class="blatt-kopf">
+      Abschnitt {{ u.abschnitt }} von {{ u.abschnitte }} — die Zeilen
+      {{ u.vonZeile + 1 }} bis {{ u.bisZeile + 1 }}. Die Wände außerhalb kennt jemand anderes.
+      @if (u.sensoren.length > 0) {
+        Die <strong>rot schraffierten Felder</strong> sind Sensoren: Wer da hineinläuft, verliert
+        Zeit. Sie liegen nie auf dem richtigen Weg.
+      }
+    </p>
+
+    <div class="raster karte" [style.--spalten]="u.groesse">
+      @for (f of felder(); track f.y * 100 + f.x) {
+        <span
+          class="feld"
+          [class.fremd]="!f.meins"
+          [class.wand-rechts]="f.rechts"
+          [class.wand-unten]="f.unten"
+          [class.ziel]="f.ziel"
+          [class.sensor]="f.sensor && !f.alarm"
+          [class.alarm]="f.alarm"
+        >
+          @if (f.ziel) {
+            <i class="pi pi-sign-out" aria-hidden="true"></i>
+          } @else if (f.alarm) {
+            <i class="pi pi-exclamation-triangle" aria-hidden="true"></i>
+          }
+          @if (f.hier) {
+            <span class="melder" aria-label="Der Melder steht hier"></span>
+          }
+        </span>
+      }
+    </div>
+
+    <p class="blatt-fuss" [class.dran]="melderBeiMir()">
+      @if (melderBeiMir()) {
+        <i class="pi pi-megaphone" aria-hidden="true"></i> Der Melder ist bei dir — du lotst.
+      } @else {
+        Der Melder ist gerade in einem anderen Abschnitt.
+      }
+    </p>
+  </div>
+}
+
+<!-- Codestellen: jeder rechnet seine Ziffer aus dem, was vorgelesen wird. -->
+@if (zahlen(); as u) {
+  <div class="blatt">
+    <p class="blatt-kopf">
+      Deine Stellen im {{ u.gesamt }}-stelligen Code. Lass dir Seriennummer und Lampen
+      vorlesen, rechne — und sag deine Ziffer mit ihrer Stelle an.
+    </p>
+
+    <ul class="regeln">
+      @for (s of u.stellen; track s.nr) {
+        <li [class.verkettet]="s.verkettet">
+          <span class="regel-nr">{{ s.nr }}.</span>
+          <span class="regel-text">
+            {{ s.text }}
+            @if (s.verkettet) {
+              <span class="wink">Diese Stelle hängt an anderen — frag zuerst dort nach.</span>
+            }
+          </span>
+        </li>
+      }
+    </ul>
+  </div>
+}

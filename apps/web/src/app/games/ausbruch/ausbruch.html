@@ -1,0 +1,209 @@
+<div class="buehne" [class.alarm]="knapp() && phase() === 'SCHLEUSE'">
+  <!-- Die Leiste: wo ihr steht, was ansteht, wie viel Zeit noch auf dem Konto ist. -->
+  <header class="leiste">
+    <span class="marke">
+      @if (schleuse() > 0) {
+        Schleuse {{ schleuse() }}<span class="von">/{{ schleusen() }}</span>
+      } @else {
+        Sektor
+      }
+      @if (schwer()) {
+        <span class="stufe" title="Schwere Stufe">schwer</span>
+      }
+    </span>
+
+    <div class="auftragsfeld">
+      @if (phase() === 'SCHLEUSE' || phase() === 'GESCHAFFT') {
+        <span class="titel">{{ titel() }}</span>
+        <span class="auftrag">{{ auftrag() }}</span>
+      } @else if (phase() === 'EINWEISUNG') {
+        <span class="titel">Einweisung</span>
+        <span class="auftrag">Gleich beginnt die erste Schleuse.</span>
+      } @else {
+        <span class="titel">{{ erfolg() ? 'Draußen' : 'Sektor verriegelt' }}</span>
+      }
+    </div>
+
+    <span class="uhr" [class.knapp]="knapp()">{{ restText() }}</span>
+  </header>
+
+  <div class="balken" aria-hidden="true">
+    <span [style.transform]="'scaleX(' + kontoAnteil() + ')'" [class.knapp]="knapp()"></span>
+  </div>
+
+  <div class="tisch">
+    <div class="anlagenplatz">
+      <!-- ============ Einweisung ============ -->
+      @if (phase() === 'EINWEISUNG') {
+        <div class="tafelkarte">
+          <h2>Ihr seid im Sektor eingeschlossen</h2>
+          <p>
+            {{ schleusen() }} Schleusen liegen zwischen euch und draußen. An jeder steht
+            <strong>einer am Pult</strong> und sieht die Anlage — alle anderen haben die
+            <strong>Unterlagen</strong> dazu und sehen das Pult nicht.
+          </p>
+          <ul class="merksatz">
+            <li>Keiner von beiden kommt allein weiter. Beschreiben und vorlesen ist das Spiel.</li>
+            @if (schwer()) {
+              <li>
+                Schwere Stufe: Die Zeichen ähneln sich, im Schacht liegen Sensoren, die Luke sieht
+                nur ihr — und manche Codestellen hängen an anderen.
+              </li>
+            }
+            <li>
+              Ein Fehler kostet {{ strafe() }} Sekunden vom gemeinsamen Zeitkonto — fragen ist
+              billiger als probieren.
+            </li>
+            <li>Nach jeder Schleuse wandert das Pult weiter. Jeder ist mal dran.</li>
+          </ul>
+          <p class="countdown">{{ phaseRest() }}</p>
+        </div>
+      } @else if (phase() === 'ENDE') {
+        <!-- ============ Abspann ============ -->
+        <div class="tafelkarte" [class.gut]="erfolg()" [class.schlecht]="!erfolg()">
+          <h2>{{ erfolg() ? 'Draußen!' : 'Zeit abgelaufen' }}</h2>
+
+          @if (erfolg()) {
+            <p>
+              Alle {{ schleusen() }} Schleusen offen, mit {{ restText() }} auf dem Konto.
+              Der Rest ging als Bonus in die Wertung.
+            </p>
+          } @else {
+            <p>
+              {{ geloestText() }} — dann war die Luft raus. Die Partie zählt als Niederlage
+              für die ganze Mannschaft.
+            </p>
+          }
+
+          <p class="bilanz">
+            <span>{{ punkte() }} Punkte für jeden</span>
+            <span>{{ fehlalarme() }} Fehlalarme</span>
+          </p>
+          <p class="countdown">{{ phaseRest() }}</p>
+        </div>
+      } @else {
+        <!-- ============ Schleuse ============ -->
+        <div class="rolle">
+          @if (binBediener()) {
+            <i class="pi pi-sliders-h" aria-hidden="true"></i>
+            <span>Du stehst am Pult. Beschreib, was du siehst — raten kostet Zeit.</span>
+          } @else if (unterlage()) {
+            <i class="pi pi-book" aria-hidden="true"></i>
+            <span>
+              Unterlage {{ unterlageNr() }} von {{ unterlagen() }} — lies vor, was passt.
+              {{ bediener()?.displayName }} steht am Pult.
+            </span>
+          } @else {
+            <i class="pi pi-eye-slash" aria-hidden="true"></i>
+            <span>Du siehst bei dieser Schleuse nichts.</span>
+          }
+        </div>
+
+        <div class="platte">
+          @if (pult(); as p) {
+            <app-pult [pult]="p" [aktiv]="phase() === 'SCHLEUSE'" (eingabe)="pultEingabe($event)" />
+          } @else if (unterlage(); as u) {
+            <app-unterlagen [unterlage]="u" />
+          }
+
+          @if (phase() === 'GESCHAFFT') {
+            <div class="ueberlage">
+              <i class="pi pi-unlock" aria-hidden="true"></i>
+              <p class="ueberlage-titel">Schleuse {{ schleuse() }} offen</p>
+              <p class="ueberlage-klein">
+                +100 für jeden · nächste Schleuse in {{ phaseRest() }}
+              </p>
+            </div>
+          }
+        </div>
+      }
+    </div>
+
+    <div class="schiene">
+      <section class="tafel">
+        <h2>Mannschaft</h2>
+
+        <ul class="leute">
+          @for (t of mannschaft(); track t.userId) {
+            <li [class.dran]="t.bedient">
+              <span class="rolle-punkt" aria-hidden="true">
+                @if (t.bedient) {
+                  <i class="pi pi-sliders-h"></i>
+                } @else {
+                  <span class="punkt" [class.an]="t.verbunden"></span>
+                }
+              </span>
+
+              <span class="name">{{ t.userId === ichId() ? 'Du' : t.displayName }}</span>
+
+              @if (t.bedient) {
+                <span class="marke klein">Pult</span>
+              } @else if (t.unterlageNr) {
+                <span class="marke klein">Nr. {{ t.unterlageNr }}</span>
+              }
+
+              @if (darfUebergeben() && !t.bedient) {
+                <button
+                  type="button"
+                  class="uebergabe"
+                  [attr.aria-label]="'Pult an ' + t.displayName + ' übergeben'"
+                  title="Pult übergeben"
+                  (click)="uebergeben(t.userId)"
+                >
+                  <i class="pi pi-arrow-right-arrow-left" aria-hidden="true"></i>
+                </button>
+              }
+            </li>
+          }
+        </ul>
+
+        <p class="gemeinsam">
+          <span class="zahl">{{ punkte() }}</span>
+          <span class="wort">Punkte — für alle dieselben</span>
+        </p>
+      </section>
+
+      <section class="tafel funkgeraet">
+        <h2>Funk</h2>
+
+        <ul class="sprueche">
+          @for (s of funk(); track s.id) {
+            <li [class]="'art-' + s.art">
+              @if (s.art === 'funk') {
+                <span class="wer">{{ s.name }}</span>
+                <span class="was">{{ s.text }}</span>
+              } @else {
+                <span class="system">{{ s.text }}</span>
+              }
+            </li>
+          } @empty {
+            <li class="art-system"><span class="system">Noch ist es still.</span></li>
+          }
+        </ul>
+
+        <form class="funkform" (submit)="$event.preventDefault(); funken()">
+          <input
+            type="text"
+            maxlength="160"
+            autocomplete="off"
+            [placeholder]="sperreRest() > 0 ? 'Sender belegt …' : 'Kurz und deutlich …'"
+            [value]="eingabe()"
+            (input)="eingabe.set($any($event.target).value)"
+          />
+          <button
+            type="submit"
+            class="senden"
+            aria-label="Funkspruch abschicken"
+            [disabled]="!eingabe().trim() || sperreRest() > 0"
+          >
+            @if (sperreRest() > 0) {
+              {{ sperreRest() }}
+            } @else {
+              <i class="pi pi-send" aria-hidden="true"></i>
+            }
+          </button>
+        </form>
+      </section>
+    </div>
+  </div>
+</div>

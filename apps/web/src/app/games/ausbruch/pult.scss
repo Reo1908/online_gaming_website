@@ -1,0 +1,352 @@
+/* Das Pult.
+   Die Farben erbt es von der Buehne des Ausbruchs -- es steht nie allein.
+   Die Ersatzwerte hinter jedem `var` sind nur der Gurt: Faende die Komponente
+   einmal woanders Verwendung, waere sie immer noch lesbar. */
+
+:host {
+  display: block;
+  color: var(--kreide, #e8edf5);
+}
+
+.anlage {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  align-items: center;
+}
+
+.hinweis {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--gedaempft, #8b96a8);
+  text-align: center;
+}
+
+/* ---------- Knoepfe ---------- */
+
+.knopf {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-width: 2.75rem;
+  padding: 0.55rem 0.875rem;
+  border-radius: 8px;
+  border: 1px solid var(--linie, #2a313d);
+  background: var(--platte-hell, #1e2733);
+  color: inherit;
+  font: inherit;
+  font-size: 0.9375rem;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--signal, #f0b429) 55%, transparent);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  /* Was Zeit kosten kann, sieht auch danach aus. */
+  &.gefahr {
+    background: color-mix(in srgb, var(--signal, #f0b429) 88%, #000);
+    border-color: transparent;
+    color: #1a1205;
+    font-weight: 600;
+  }
+}
+
+/* ---------- Sicherungskasten ---------- */
+
+.kabelbaum {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: min(100%, 30rem);
+  display: grid;
+  gap: 0.5rem;
+}
+
+.kabel {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: var(--platte-hell, #1e2733);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    border-color: var(--linie, #2a313d);
+  }
+
+  /* Angetippt heisst: liegt in der Schere. Das muss man von zwei Metern
+     Abstand sehen -- gleich wird es unwiderruflich. */
+  &.gewaehlt {
+    border-color: var(--signal, #f0b429);
+    background: color-mix(in srgb, var(--signal, #f0b429) 12%, var(--platte-hell, #1e2733));
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
+}
+
+.kabel-nr {
+  flex: none;
+  width: 1.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.875rem;
+  color: var(--gedaempft, #8b96a8);
+  text-align: right;
+}
+
+/* Der Draht selbst: breit genug, dass die Farbe die Hauptsache ist.
+
+   Der helle Saum ist kein Zierrat: Ein schwarzes Kabel ist vor der dunklen
+   Platte sonst gar nicht da, und der Bediener beschreibt vier Adern, wo sechs
+   liegen. Aussen statt innen, damit er die Farbflaeche nicht verkleinert. */
+.draht {
+  flex: 1;
+  height: 0.6rem;
+  border-radius: 999px;
+  background: var(--draht);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--kreide, #e8edf5) 30%, transparent);
+}
+
+.kabel-name {
+  flex: none;
+  width: 6rem;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.stern {
+  color: var(--signal, #f0b429);
+}
+
+.anlage-fuss {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* ---------- Schloesser (Symbole und Zahlen) ---------- */
+
+.folge {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.stelle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.5rem;
+  height: 3rem;
+  border-radius: 8px;
+  border: 1px solid var(--linie, #2a313d);
+  background: var(--buehne, #0d1117);
+  font-size: 1.5rem;
+  font-variant-numeric: tabular-nums;
+
+  &.gesetzt {
+    border-color: color-mix(in srgb, var(--gut, #4ade80) 55%, transparent);
+    color: var(--gut, #4ade80);
+  }
+}
+
+.tastenfeld {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+/* Gross, damit die Form zaehlt: Ueber diese Zeichen wird geredet, und ein
+   kleines Zeichen beschreibt sich schlechter als ein grosses. */
+.symboltaste {
+  width: 5rem;
+  height: 5rem;
+  border-radius: 12px;
+  border: 1px solid var(--linie, #2a313d);
+  background: var(--platte-hell, #1e2733);
+  color: inherit;
+  font-family: 'Segoe UI Symbol', 'Apple Symbols', 'Noto Sans Symbols2', serif;
+  font-size: 2.5rem;
+  line-height: 1;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--signal, #f0b429) 55%, transparent);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+}
+
+.ablesung {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2rem;
+  justify-content: center;
+}
+
+.posten {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.posten .marke {
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gedaempft, #8b96a8);
+}
+
+.seriennummer {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.75rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--signal, #f0b429);
+}
+
+.lampen {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.lampe {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  border: 1px solid var(--linie, #2a313d);
+  background: var(--buehne, #0d1117);
+  font-size: 0.75rem;
+  color: var(--gedaempft, #8b96a8);
+
+  &.an {
+    background: color-mix(in srgb, var(--signal, #f0b429) 85%, #000);
+    border-color: transparent;
+    color: #1a1205;
+    font-weight: 700;
+  }
+}
+
+.zifferblock {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.5rem;
+  width: min(100%, 26rem);
+}
+
+/* ---------- Wartungsschacht ---------- */
+
+.raster {
+  display: grid;
+  grid-template-columns: repeat(var(--spalten), 1fr);
+  width: min(100%, 24rem);
+  aspect-ratio: 1;
+  border: 2px solid color-mix(in srgb, var(--kreide, #e8edf5) 45%, transparent);
+  border-radius: 4px;
+  background: var(--buehne, #0d1117);
+
+  &:focus-visible {
+    outline: 2px solid var(--signal, #f0b429);
+    outline-offset: 3px;
+  }
+}
+
+.feld {
+  position: relative;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  /* Die durchsichtigen Raender stehen auch bei den Feldern ohne Wand: Ohne
+     sie waeren die Zellen unterschiedlich gross und das Raster liefe schief. */
+  border-right: 2px solid transparent;
+  border-bottom: 2px solid transparent;
+
+  i {
+    font-size: 0.75rem;
+    color: var(--gut, #4ade80);
+  }
+}
+
+/* Blind heisst blind: Der Bediener bekommt keine einzige Wand geschickt.
+   Die Spur ist alles, was er hat -- und sie ist sein eigenes Werk. */
+.blind .feld.besucht {
+  background: color-mix(in srgb, var(--kreide, #e8edf5) 6%, transparent);
+}
+
+.feld.ziel {
+  background: color-mix(in srgb, var(--gut, #4ade80) 14%, transparent);
+}
+
+/* Ein Sensor, in den der Melder schon getreten ist. Vorher stand er nur in den
+   Unterlagen -- danach ist er keine Warnung mehr, sondern eine Narbe. */
+.feld.alarm {
+  background: color-mix(in srgb, var(--alarm, #ff5d5d) 30%, transparent);
+
+  i {
+    color: var(--alarm, #ff5d5d);
+    font-size: 0.625rem;
+  }
+}
+
+.melder {
+  position: absolute;
+  width: 45%;
+  height: 45%;
+  border-radius: 50%;
+  background: var(--signal, #f0b429);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal, #f0b429) 25%, transparent);
+}
+
+.kreuz {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.kreuz-mitte {
+  display: flex;
+  gap: 3rem;
+}
+
+@media (max-width: 620px) {
+  .kabel-name {
+    width: 4.5rem;
+    font-size: 0.8125rem;
+  }
+
+  .symboltaste {
+    width: 4rem;
+    height: 4rem;
+    font-size: 2rem;
+  }
+
+  .zifferblock {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}

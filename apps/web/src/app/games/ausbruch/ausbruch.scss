@@ -1,0 +1,548 @@
+/* Der Sektor.
+   Dieselbe dunkle Buehne wie bei Scribble, aber kaelter: Dort ist es das
+   Atelier, in dem nur das Blatt leuchtet, hier ein Maschinenraum, in dem nur
+   die Anzeigen leuchten. Das gelbe Signal traegt die Anlage, Rot gehoert
+   allein dem Alarm -- deshalb kommt es sonst nirgends vor. */
+
+:host {
+  --buehne: #0d1117;
+  --platte: #161d27;
+  --platte-hell: #1e2733;
+  --kreide: #e8edf5;
+  --gedaempft: color-mix(in srgb, var(--kreide) 55%, transparent);
+  --linie: color-mix(in srgb, var(--kreide) 12%, transparent);
+  --signal: #f0b429;
+  --alarm: #ff5d5d;
+  --gut: #4ade80;
+
+  display: block;
+
+  /* Aus der 960-px-Spalte ausbrechen: Pult und Funk nebeneinander brauchen
+     Platz, und der Schacht ist ein Quadrat -- geteilte Breite kostet ihn
+     doppelt. */
+  --stage-breite: min(1400px, 100vw - 2rem);
+  width: var(--stage-breite);
+  margin-inline: calc((100% - var(--stage-breite)) / 2);
+}
+
+.buehne {
+  background: var(--buehne);
+  border-radius: 14px;
+  overflow: hidden;
+  color: var(--kreide);
+  /* Der Rahmen glimmt in der letzten Minute -- eine Farbe, kein Blinken:
+     Blinken sieht man auch dann noch, wenn man nicht hinsehen will. */
+  box-shadow: inset 0 0 0 1px var(--linie);
+  transition: box-shadow 0.4s ease;
+
+  &.alarm {
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--alarm) 55%, transparent);
+  }
+}
+
+/* ---------- Leiste ---------- */
+
+.leiste {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.875rem 1.25rem;
+}
+
+.marke {
+  font-size: 0.875rem;
+  color: var(--gedaempft);
+  white-space: nowrap;
+  flex: none;
+  min-width: 7rem;
+  letter-spacing: 0.04em;
+
+  .von {
+    opacity: 0.6;
+  }
+}
+
+/* Die Stufe steht neben der Schleusennummer, nicht in der Mitte: Sie aendert
+   sich nie, und was sich nie aendert, gehoert an den Rand. */
+.stufe {
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--alarm) 22%, transparent);
+  color: var(--kreide);
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.auftragsfeld {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  text-align: center;
+}
+
+.titel {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.auftrag {
+  font-size: 0.8125rem;
+  color: var(--gedaempft);
+}
+
+.uhr {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 1.5rem;
+  font-weight: 700;
+  min-width: 4.5rem;
+  text-align: right;
+  flex: none;
+  line-height: 1;
+
+  &.knapp {
+    color: var(--alarm);
+  }
+}
+
+.balken {
+  height: 3px;
+  background: var(--linie);
+
+  span {
+    display: block;
+    height: 100%;
+    background: var(--signal);
+    transform-origin: left;
+    transition: transform 0.4s linear;
+
+    &.knapp {
+      background: var(--alarm);
+    }
+  }
+}
+
+/* ---------- Tisch ---------- */
+
+.tisch {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 20rem;
+  gap: 1.25rem;
+  padding: 1.25rem;
+}
+
+.anlagenplatz {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+/* Die Zeile sagt in einem Satz, wer man gerade ist. Ohne sie sucht jeder
+   erst einmal, ob er etwas anklicken darf oder vorlesen soll. */
+.rolle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--gedaempft);
+
+  i {
+    color: var(--signal);
+  }
+}
+
+.platte {
+  position: relative;
+  background: var(--platte);
+  border: 1px solid var(--linie);
+  border-radius: 12px;
+  padding: 1.25rem;
+  min-height: 22rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* ---------- Karten fuer Einweisung und Abspann ---------- */
+
+.tafelkarte {
+  background: var(--platte);
+  border: 1px solid var(--linie);
+  border-radius: 12px;
+  padding: 2rem;
+  min-height: 22rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
+
+  h2 {
+    margin: 0 0 0.75rem;
+    font-size: 1.5rem;
+    letter-spacing: -0.01em;
+  }
+
+  p {
+    margin: 0 auto;
+    max-width: 34rem;
+    color: var(--gedaempft);
+    line-height: 1.6;
+  }
+
+  &.gut h2 {
+    color: var(--gut);
+  }
+
+  &.schlecht h2 {
+    color: var(--alarm);
+  }
+}
+
+.merksatz {
+  list-style: none;
+  margin: 1.25rem auto 0;
+  padding: 0;
+  max-width: 34rem;
+  display: grid;
+  gap: 0.5rem;
+  text-align: left;
+
+  li {
+    position: relative;
+    padding-left: 1.25rem;
+    font-size: 0.875rem;
+    color: var(--gedaempft);
+    line-height: 1.5;
+
+    &::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0.55em;
+      width: 0.35rem;
+      height: 0.35rem;
+      border-radius: 50%;
+      background: var(--signal);
+    }
+  }
+}
+
+.bilanz {
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+  margin-top: 1rem;
+  font-size: 0.875rem;
+}
+
+.countdown {
+  margin-top: 1.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--kreide);
+  opacity: 0.45;
+}
+
+/* ---------- Ueberlage „Schleuse offen" ---------- */
+
+.ueberlage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border-radius: 12px;
+  /* Durchscheinend statt deckend: Man soll sehen, was man gerade geloest hat. */
+  background: color-mix(in srgb, var(--buehne) 88%, transparent);
+  backdrop-filter: blur(2px);
+
+  i {
+    font-size: 1.75rem;
+    color: var(--gut);
+    margin-bottom: 0.25rem;
+  }
+}
+
+.ueberlage-titel {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.ueberlage-klein {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--gedaempft);
+}
+
+/* ---------- Schiene ---------- */
+
+.schiene {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.tafel {
+  background: var(--platte);
+  border-radius: 10px;
+  padding: 0.875rem 1rem;
+
+  h2 {
+    margin: 0 0 0.75rem;
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--gedaempft);
+  }
+}
+
+.leute {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.15rem;
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 0.4rem;
+    margin-inline: -0.4rem;
+    border-radius: 6px;
+    font-size: 0.9375rem;
+  }
+
+  .dran {
+    background: color-mix(in srgb, var(--signal) 16%, transparent);
+  }
+
+  .name {
+    margin-right: auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.rolle-punkt {
+  width: 1rem;
+  display: grid;
+  place-items: center;
+  flex: none;
+
+  i {
+    font-size: 0.75rem;
+    color: var(--signal);
+  }
+}
+
+.punkt {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--kreide) 25%, transparent);
+
+  &.an {
+    background: var(--gut);
+  }
+}
+
+.marke.klein {
+  min-width: 0;
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--kreide) 8%, transparent);
+}
+
+.uebergabe {
+  border: 0;
+  background: transparent;
+  color: var(--gedaempft);
+  cursor: pointer;
+  padding: 0.15rem 0.25rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+
+  &:hover {
+    color: var(--kreide);
+    background: color-mix(in srgb, var(--kreide) 10%, transparent);
+  }
+}
+
+/* Ein Punktestand fuer alle. Kein Rang, keine Reihenfolge -- dass es hier
+   nichts zu sortieren gibt, ist die halbe Aussage des Spiels. */
+.gemeinsam {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0.875rem 0 0;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--linie);
+
+  .zahl {
+    font-size: 1.375rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .wort {
+    font-size: 0.75rem;
+    color: var(--gedaempft);
+  }
+}
+
+/* ---------- Funk ---------- */
+
+.funkgeraet {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.sprueche {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  overflow-y: auto;
+  max-height: 22rem;
+  /* Neues unten, wie in jedem Funkverkehr. */
+  flex: 1;
+  justify-content: flex-end;
+
+  li {
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    word-break: break-word;
+  }
+
+  .wer {
+    font-weight: 600;
+    margin-right: 0.35rem;
+  }
+
+  .was {
+    color: var(--gedaempft);
+  }
+
+  .art-system .system {
+    color: color-mix(in srgb, var(--kreide) 40%, transparent);
+    font-style: italic;
+  }
+
+  .art-alarm .system {
+    color: var(--alarm);
+    font-style: normal;
+  }
+}
+
+.funkform {
+  display: flex;
+  gap: 0.375rem;
+
+  input {
+    flex: 1;
+    min-width: 0;
+    padding: 0.5rem 0.625rem;
+    border-radius: 8px;
+    border: 1px solid var(--linie);
+    background: var(--buehne);
+    color: var(--kreide);
+    font: inherit;
+    font-size: 0.875rem;
+
+    &::placeholder {
+      color: color-mix(in srgb, var(--kreide) 35%, transparent);
+    }
+
+    &:focus {
+      outline: none;
+      border-color: color-mix(in srgb, var(--signal) 55%, transparent);
+    }
+  }
+}
+
+.senden {
+  flex: none;
+  width: 2.25rem;
+  border-radius: 8px;
+  border: 0;
+  background: var(--signal);
+  color: #1a1205;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+
+  &:disabled {
+    background: color-mix(in srgb, var(--kreide) 12%, transparent);
+    color: var(--gedaempft);
+    cursor: default;
+  }
+}
+
+/* ---------- Schmale Fenster ---------- */
+
+@media (max-width: 1100px) {
+  :host {
+    width: auto;
+    margin-inline: 0;
+  }
+
+  .tisch {
+    grid-template-columns: 1fr;
+  }
+
+  .sprueche {
+    max-height: 12rem;
+  }
+}
+
+@media (max-width: 620px) {
+  .leiste {
+    gap: 0.75rem;
+    padding: 0.75rem 0.875rem;
+  }
+
+  .marke {
+    min-width: 0;
+    font-size: 0.75rem;
+  }
+
+  .auftrag {
+    display: none;
+  }
+
+  .tisch,
+  .platte,
+  .tafelkarte {
+    padding: 0.875rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .balken span,
+  .buehne {
+    transition: none;
+  }
+}

@@ -1,0 +1,179 @@
+<!-- Sicherungskasten: sechs Kabel, eine Schere, und keine Ahnung ohne die anderen. -->
+@if (kabelPult(); as p) {
+  <div class="anlage kasten">
+    @if (p.modul) {
+      <div class="ablesung">
+        <div class="posten">
+          <span class="marke">Modulnummer</span>
+          <span class="seriennummer">{{ p.modul }}</span>
+        </div>
+      </div>
+    }
+
+    <ul class="kabelbaum">
+      @for (k of p.kabel; track k.nr) {
+        <li>
+          <button
+            type="button"
+            class="kabel"
+            [class.gewaehlt]="gewaehlt() === k.nr"
+            [style.--draht]="farbwert(k.farbe)"
+            [attr.aria-pressed]="gewaehlt() === k.nr"
+            [disabled]="!aktiv()"
+            (click)="kabelWaehlen(k.nr)"
+          >
+            <span class="kabel-nr">{{ k.nr }}</span>
+            <span class="draht" aria-hidden="true"></span>
+            <span class="kabel-name">
+              {{ farbname(k.farbe) }}
+              @if (k.markiert) {
+                <span class="stern" title="Dieses Kabel trägt einen Stern">★</span>
+              }
+            </span>
+          </button>
+        </li>
+      }
+    </ul>
+
+    <div class="anlage-fuss">
+      <p class="hinweis">
+        @if (gewaehlt(); as nr) {
+          Kabel {{ nr }} liegt in der Schere.
+        } @else {
+          Erst antippen, dann durchtrennen — ein Klick allein schneidet nichts.
+        }
+      </p>
+      <button
+        type="button"
+        class="knopf gefahr"
+        [disabled]="!aktiv() || gewaehlt() === null"
+        (click)="durchtrennen()"
+      >
+        <i class="pi pi-bolt" aria-hidden="true"></i> Durchtrennen
+      </button>
+    </div>
+  </div>
+}
+
+<!-- Symbolschloss: die Zeichen haben keinen Namen. Viel Spaß beim Beschreiben. -->
+@if (symbolePult(); as p) {
+  <div class="anlage schloss">
+    <div class="folge" [attr.aria-label]="p.gedrueckt.length + ' von ' + p.gesamt + ' Zeichen'">
+      @for (z of symbolfelder(); track $index) {
+        <span class="stelle" [class.gesetzt]="z !== ''">{{ z }}</span>
+      }
+    </div>
+
+    <div class="tastenfeld">
+      @for (t of p.tasten; track t) {
+        <button type="button" class="symboltaste" [disabled]="!aktiv()" (click)="symbolDruecken(t)">
+          {{ t }}
+        </button>
+      }
+    </div>
+
+    <p class="hinweis">
+      Ein falsches Zeichen setzt die Folge zurück — und kostet Zeit.
+    </p>
+  </div>
+}
+
+<!-- Wartungsschacht: der Bediener sieht keine einzige Wand. Das ist der Witz. -->
+@if (schachtPult(); as p) {
+  <div class="anlage schacht">
+    <div
+      class="raster blind"
+      [style.--spalten]="p.groesse"
+      tabindex="0"
+      role="application"
+      aria-label="Wartungsschacht — mit den Pfeiltasten steuern"
+      (keydown)="taste($event)"
+    >
+      @for (f of felder(); track f.y * 100 + f.x) {
+        <span
+          class="feld"
+          [class.besucht]="f.besucht"
+          [class.ziel]="f.ziel"
+          [class.alarm]="f.alarm"
+        >
+          @if (f.ziel) {
+            <i class="pi pi-sign-out" aria-hidden="true"></i>
+          } @else if (f.alarm) {
+            <i class="pi pi-exclamation-triangle" aria-hidden="true"></i>
+          }
+          @if (f.hier) {
+            <span class="melder" aria-label="Hier bist du"></span>
+          }
+        </span>
+      }
+    </div>
+
+    <div class="kreuz">
+      <button type="button" class="knopf" [disabled]="!aktiv()" (click)="schritt('hoch')" aria-label="nach oben">
+        <i class="pi pi-chevron-up" aria-hidden="true"></i>
+      </button>
+      <div class="kreuz-mitte">
+        <button type="button" class="knopf" [disabled]="!aktiv()" (click)="schritt('links')" aria-label="nach links">
+          <i class="pi pi-chevron-left" aria-hidden="true"></i>
+        </button>
+        <button type="button" class="knopf" [disabled]="!aktiv()" (click)="schritt('rechts')" aria-label="nach rechts">
+          <i class="pi pi-chevron-right" aria-hidden="true"></i>
+        </button>
+      </div>
+      <button type="button" class="knopf" [disabled]="!aktiv()" (click)="schritt('runter')" aria-label="nach unten">
+        <i class="pi pi-chevron-down" aria-hidden="true"></i>
+      </button>
+    </div>
+
+    <p class="hinweis">
+      @if (p.ziel) {
+        Frag, bevor du gehst: Jeder Anstoß gegen eine Wand meldet sich oben.
+      } @else {
+        Die Luke siehst du nicht — die anderen schon. Frag, bevor du gehst.
+      }
+    </p>
+  </div>
+}
+
+<!-- Zahlenschloss: vorlesen, alle rechnen, einer tippt. -->
+@if (zahlenPult(); as p) {
+  <div class="anlage schloss">
+    <div class="ablesung">
+      <div class="posten">
+        <span class="marke">Seriennummer</span>
+        <span class="seriennummer">{{ p.seriennummer }}</span>
+      </div>
+
+      <div class="posten">
+        <span class="marke">Lampen</span>
+        <span class="lampen">
+          @for (an of p.lampen; track $index) {
+            <span class="lampe" [class.an]="an" [attr.aria-label]="'Lampe ' + ($index + 1) + (an ? ' leuchtet' : ' ist dunkel')">
+              {{ $index + 1 }}
+            </span>
+          }
+        </span>
+      </div>
+    </div>
+
+    <div class="folge">
+      @for (z of codefelder(); track $index) {
+        <span class="stelle" [class.gesetzt]="z !== ''">{{ z }}</span>
+      }
+    </div>
+
+    <div class="zifferblock">
+      @for (z of ziffern; track z) {
+        <button type="button" class="knopf" [disabled]="!aktiv()" (click)="zifferTippen(z)">
+          {{ z }}
+        </button>
+      }
+      <button type="button" class="knopf" [disabled]="!aktiv() || !code()" (click)="zurueck()" aria-label="Letzte Ziffer löschen">
+        <i class="pi pi-delete-left" aria-hidden="true"></i>
+      </button>
+      <button type="button" class="knopf gefahr" [disabled]="!aktiv() || !codeVoll()" (click)="codePruefen()">
+        Prüfen
+      </button>
+    </div>
+  </div>
+}

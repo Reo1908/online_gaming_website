@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma.js';
 import type { SpielModul } from './typen.js';
 import { buzzer } from './buzzer/index.js';
 import { scribble } from './scribble/index.js';
+import { ausbruch } from './ausbruch/index.js';
 
 export type { PartieInfo, SpielKontext, SpielModul, Zuschauer } from './typen.js';
 
@@ -14,7 +15,7 @@ export type { PartieInfo, SpielKontext, SpielModul, Zuschauer } from './typen.js
  * Start daraus abgeglichen, die Einstellungen pruefen sich ueber das Zod-Schema
  * des Moduls, und die Socket-Schicht reicht ihm die Ereignisse durch.
  */
-export const SPIELE: SpielModul[] = [buzzer, scribble];
+export const SPIELE: SpielModul[] = [buzzer, scribble, ausbruch];
 
 export function spielart(slug: string): SpielModul | undefined {
   return SPIELE.find((s) => s.slug === slug);

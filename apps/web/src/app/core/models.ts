@@ -129,8 +129,6 @@ export interface SpielArt {
   minPlayers: number;
   maxPlayers: number;
   standardEinstellungen: Record<string, unknown>;
-  /** Ob die Spielart Woerter aus den Themen zieht -- Scribble ja, Buzzer nein. */
-  brauchtThemen: boolean;
 }
 
 /** Ein Themengebiet, wie es die Lobby zur Auswahl bekommt. */
@@ -224,6 +222,11 @@ export interface LiveTeilnehmer {
   hatGeraten?: boolean;
   /** Scribble: was sie im abgelaufenen Zug bekommen hat. */
   zugPunkte?: number | null;
+
+  /** Ausbruch: ob diese Person gerade am Pult steht. */
+  bedient?: boolean;
+  /** Ausbruch: welches Paket der Unterlagen sie hat -- null beim Bediener. */
+  unterlageNr?: number | null;
 }
 
 /** Der Live-Zustand einer Partie, wie ihn die Socket-Verbindung schickt. */

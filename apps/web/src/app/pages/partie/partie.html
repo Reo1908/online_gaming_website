@@ -9,24 +9,26 @@
   }
 
   @if (partie(); as p) {
-    <header class="kopf">
-      <div>
-        <h1>{{ p.name }}</h1>
-        <p class="meta">
-          {{ p.spiel.name }}
-          @if (leitung(); as l) {
-            · Leitung: {{ l.displayName }}
-          }
-        </p>
-      </div>
-
-      @if (status() === 'RUNNING' && ich()?.spieltMit) {
-        <div class="punktestand">
-          <span class="zahl">{{ ich()?.punkte ?? 0 }}</span>
-          <span class="wort">Punkte</span>
+    @if (zeigeKopf()) {
+      <header class="kopf">
+        <div>
+          <h1>{{ p.name }}</h1>
+          <p class="meta">
+            {{ p.spiel.name }}
+            @if (leitung(); as l) {
+              · Leitung: {{ l.displayName }}
+            }
+          </p>
         </div>
-      }
-    </header>
+
+        @if (status() === 'RUNNING' && ich()?.spieltMit) {
+          <div class="punktestand">
+            <span class="zahl">{{ ich()?.punkte ?? 0 }}</span>
+            <span class="wort">Punkte</span>
+          </div>
+        }
+      </header>
+    }
 
     <!-- Noch nicht dabei: erst beitreten, dann geht es weiter. -->
     @if (!binDabei()) {
@@ -112,49 +114,50 @@
       </div>
 
       <!-- ============ Themen ============ -->
-      <section class="karte">
-        <h2>Themen</h2>
+      @if (themenMoeglich()) {
+        <section class="karte">
+          <h2>Themen</h2>
 
-        @if (binLeitung()) {
-          <p class="muted klein">
-            Die Themen sagen, worum es geht — und beim Scribble, aus welchen Wörtern gezogen wird.
-            Ohne Auswahl zählen alle.
-          </p>
+          @if (binLeitung()) {
+            <p class="muted klein">
+              Bestimmt, aus welchen Wörtern gezogen wird. Ohne Auswahl zählen alle.
+            </p>
 
-          @if (themen().length > 0) {
-            <ul class="etiketten waehlbar">
-              @for (t of themen(); track t.slug) {
-                <li>
-                  <button
-                    type="button"
-                    class="etikett"
-                    [class.aktiv]="istGewaehlt(t.slug)"
-                    [style.--farbe]="t.farbe"
-                    [attr.aria-pressed]="istGewaehlt(t.slug)"
-                    [disabled]="busy()"
-                    (click)="themaUmschalten(t.slug)"
-                  >
-                    {{ t.name }}
-                    <span class="anzahl">{{ t.woerter }}</span>
-                  </button>
-                </li>
+            @if (themen().length > 0) {
+              <ul class="etiketten waehlbar">
+                @for (t of themen(); track t.slug) {
+                  <li>
+                    <button
+                      type="button"
+                      class="etikett"
+                      [class.aktiv]="istGewaehlt(t.slug)"
+                      [style.--farbe]="t.farbe"
+                      [attr.aria-pressed]="istGewaehlt(t.slug)"
+                      [disabled]="busy()"
+                      (click)="themaUmschalten(t.slug)"
+                    >
+                      {{ t.name }}
+                      <span class="anzahl">{{ t.woerter }}</span>
+                    </button>
+                  </li>
+                }
+              </ul>
+            } @else {
+              <p class="muted klein">
+                Es gibt noch keine Themen. Ein Administrator legt sie unter „Administration" an.
+              </p>
+            }
+          } @else if (etiketten().length > 0) {
+            <ul class="etiketten">
+              @for (e of etiketten(); track e.slug) {
+                <li class="etikett" [style.--farbe]="e.farbe">{{ e.name }}</li>
               }
             </ul>
           } @else {
-            <p class="muted klein">
-              Es gibt noch keine Themen. Ein Administrator legt sie unter „Administration" an.
-            </p>
+            <p class="muted klein">Kein Thema gewählt — es zählen alle Wörter.</p>
           }
-        } @else if (etiketten().length > 0) {
-          <ul class="etiketten">
-            @for (e of etiketten(); track e.slug) {
-              <li class="etikett" [style.--farbe]="e.farbe">{{ e.name }}</li>
-            }
-          </ul>
-        } @else {
-          <p class="muted klein">Kein Thema gewählt — es zählen alle Wörter.</p>
-        }
-      </section>
+        </section>
+      }
 
       <div class="aktionen">
         @if (binLeitung()) {
@@ -175,8 +178,8 @@
           @if (!genugSpieler()) {
             <p class="warten">
               <i class="pi pi-hourglass" aria-hidden="true"></i>
-              @if (spielSlug() === 'scribble') {
-                Scribble braucht mindestens zwei Mitspielende
+              @if (noetigeSpieler() > 1) {
+                {{ p.spiel.name }} braucht mindestens {{ noetigeSpieler() }} Mitspielende
               } @else {
                 Es ist noch niemand beigetreten
               }
@@ -205,6 +208,9 @@
           @case ('scribble') {
             <app-scribble [zustand]="live" [ichId]="ichId()" />
           }
+          @case ('ausbruch') {
+            <app-ausbruch [zustand]="live" [ichId]="ichId()" [binLeitung]="binLeitung()" />
+          }
           @default {
             <p class="muted">Diese Spielart kennt die Oberfläche noch nicht.</p>
           }
@@ -224,7 +230,7 @@
     } @else {
       <!-- ============ Vorbei ============ -->
       <section class="karte">
-        <h2>{{ status() === 'FINISHED' ? 'Endstand' : 'Abgebrochen' }}</h2>
+        <h2>{{ endTitel() }}</h2>
 
         @if (status() === 'ABORTED') {
           <p class="muted">Die Partie wurde abgebrochen und zählt für keine Statistik.</p>
@@ -232,7 +238,9 @@
           <ol class="endstand">
             @for (t of endstand(); track t.userId) {
               <li>
-                <span class="platz">{{ t.platz ?? $index + 1 }}</span>
+                @if (!gemeinsamesSpiel()) {
+                  <span class="platz">{{ t.platz ?? $index + 1 }}</span>
+                }
                 <span class="name">{{ t.displayName }}</span>
                 <span class="punkte">{{ t.punkte }}</span>
               </li>

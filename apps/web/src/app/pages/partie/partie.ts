@@ -9,7 +9,13 @@ import { AuthService } from '../../core/auth.service';
 import { RealtimeService } from '../../core/realtime.service';
 import { Buzzer } from '../../games/buzzer/buzzer';
 import { Scribble } from '../../games/scribble/scribble';
-import { einstellungenLesbar, spielDefinition } from '../../games/registry';
+import { Ausbruch } from '../../games/ausbruch/ausbruch';
+import {
+  einstellungenLesbar,
+  minSpieler,
+  nutztThemen,
+  spielDefinition,
+} from '../../games/registry';
 import type {
   Etikett,
   LiveTeilnehmer,
@@ -27,7 +33,7 @@ import type {
  */
 @Component({
   selector: 'app-partie',
-  imports: [ButtonModule, MessageModule, Buzzer, Scribble],
+  imports: [ButtonModule, MessageModule, Buzzer, Scribble, Ausbruch],
   templateUrl: './partie.html',
   styleUrl: './partie.scss',
 })
@@ -138,10 +144,52 @@ export class Partie implements OnDestroy {
     () => spielDefinition(this.spielSlug())?.manuellesEnde ?? true,
   );
 
-  /** Wie viele Mitspielende es zum Start braucht. */
-  protected readonly genugSpieler = computed(() => {
-    const noetig = this.spielSlug() === 'scribble' ? 2 : 1;
-    return this.spieler().length >= noetig;
+  /** Themen gibt es nur bei Spielen, die Woerter daraus ziehen. */
+  protected readonly themenMoeglich = computed(() => nutztThemen(this.spielSlug()));
+
+  /**
+   * Ob der Seitenkopf waehrend des Spiels stehen bleibt.
+   *
+   * Bei einer Spielart, die ihre eigene Buehne aufbaut, waere er doppelt --
+   * und weil die Buehne breiter ist als die Seitenspalte, stuende er auch
+   * noch eingerueckt daneben.
+   */
+  protected readonly zeigeKopf = computed(
+    () => this.status() !== 'RUNNING' || !spielDefinition(this.spielSlug())?.volleBreite,
+  );
+
+  /**
+   * Wie viele Mitspielende es zum Start braucht.
+   *
+   * Die Zahl steht in der Spielbeschreibung, nicht hier: Sonst waere diese
+   * Datei bei jeder neuen Spielart wieder aufzuschlagen -- und genau das
+   * vergisst man.
+   */
+  protected readonly noetigeSpieler = computed(() => minSpieler(this.spielSlug()));
+
+  protected readonly genugSpieler = computed(
+    () => this.spieler().length >= this.noetigeSpieler(),
+  );
+
+  /**
+   * Ob alle zusammen gewinnen oder verlieren.
+   *
+   * Aendert nur, wie der Schluss dasteht: Beim Ausbruch haben alle dieselbe
+   * Punktzahl, und eine Liste mit fuenfmal „Platz 1" ist keine Wertung,
+   * sondern ein Missverstaendnis.
+   */
+  protected readonly gemeinsamesSpiel = computed(
+    () => spielDefinition(this.spielSlug())?.art === 'zusammen',
+  );
+
+  protected readonly endTitel = computed(() => {
+    if (this.status() === 'ABORTED') return 'Abgebrochen';
+    if (!this.gemeinsamesSpiel()) return 'Endstand';
+
+    const alle = this.endstand();
+    return alle.length > 0 && alle.every((t) => t.ergebnis === 'WIN')
+      ? 'Gemeinsam geschafft'
+      : 'Gemeinsam gescheitert';
   });
 
   /**
@@ -172,9 +220,11 @@ export class Partie implements OnDestroy {
       const dabei = partie.teilnehmer.some((t) => t.userId === this.ichId());
       if (dabei) this.realtime.betreten(code);
 
-      // Die Themen braucht nur die Leitung einer wartenden Lobby -- deshalb
-      // erst dann und nicht bei jedem Aufruf.
-      if (dabei && partie.status === 'LOBBY') void this.themenLaden();
+      // Die Themen braucht nur die Leitung einer wartenden Lobby, und nur bei
+      // einer Spielart, die sie nutzt -- deshalb erst dann.
+      if (dabei && partie.status === 'LOBBY' && nutztThemen(partie.spiel.slug)) {
+        void this.themenLaden();
+      }
     } catch (err) {
       this.fehler.set(this.meldung(err, 'Diese Partie konnte nicht geladen werden.'));
     } finally {

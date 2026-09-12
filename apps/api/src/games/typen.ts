@@ -39,6 +39,17 @@ export interface SpielModul {
   /** Braucht das Spiel Woerter aus den Themengebieten? */
   brauchtWoerter: boolean;
 
+  /**
+   * Ob alle zusammen gewinnen oder zusammen verlieren.
+   *
+   * Die Vorgabe ist der Wettkampf: Wer am Ende die meisten Punkte hat, hat
+   * gewonnen. Beim Ausbruch waere das falsch -- dort haben alle dieselbe
+   * Punktzahl, und die Frage ist nicht, wer vorn liegt, sondern ob sie
+   * rausgekommen sind. Steht hier `true`, bekommt jeder Mitspielende
+   * dasselbe Ergebnis; welches, sagt das Spiel mit `ctx.beenden({ erfolg })`.
+   */
+  gemeinsameWertung?: boolean;
+
   einstellungen: ZodType;
 
   /**
@@ -150,6 +161,10 @@ export interface SpielKontext {
   /**
    * Beendet die Partie regulaer und schreibt die Wertung fest.
    * Fuer Spiele, die von selbst ans Ende kommen.
+   *
+   * `erfolg` zaehlt nur bei `gemeinsameWertung`: Es sagt, ob die Runde als
+   * Ganzes gewonnen hat. Ein Wettkampfspiel laesst es weg -- dort entscheiden
+   * die Punkte.
    */
-  beenden(): Promise<void>;
+  beenden(ergebnis?: { erfolg: boolean }): Promise<void>;
 }

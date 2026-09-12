@@ -7,10 +7,20 @@ import {
   output,
   viewChild,
 } from '@angular/core';
+import { fuellen } from './fuellen';
 
-/** Ein Pinselstrich in normierten Koordinaten (0..1), abwechselnd x und y. */
-export interface Strich {
+export type Malart = 'strich' | 'fuellung';
+
+/**
+ * Ein Malzug in normierten Koordinaten (0..1), abwechselnd x und y.
+ *
+ * Ein `strich` sammelt seine Punkte ueber die Zeit, eine `fuellung` hat genau
+ * einen: die Stelle, an der der Eimer ausgekippt wurde. Beide stehen in
+ * derselben Liste, weil ihre Reihenfolge zaehlt.
+ */
+export interface Malzug {
   id: string;
+  art: Malart;
   farbe: string;
   breite: number;
   punkte: number[];
@@ -28,7 +38,7 @@ const SENDETAKT_MS = 60;
 /**
  * Die Zeichenflaeche.
  *
- * Haelt ihre Striche selbst und zeichnet neue Punkte einzeln nach, statt bei
+ * Haelt ihre Malzuege selbst und zeichnet neue Punkte einzeln nach, statt bei
  * jeder Aenderung alles neu zu malen: Waehrend eines Zuges kommen dutzende
  * Punkte je Sekunde herein, und ein voller Neuaufbau bei jedem waere auf
  * einem schwaecheren Geraet sichtbar ruckelig.
@@ -41,7 +51,8 @@ const SENDETAKT_MS = 60;
   template: `
     <canvas
       #leinwand
-      [class.zeichnend]="darfZeichnen()"
+      [class.malend]="darfZeichnen()"
+      [class.eimer]="darfZeichnen() && werkzeug() === 'fuellung'"
       (pointerdown)="beginnen($event)"
       (pointermove)="ziehen($event)"
       (pointerup)="loslassen()"
@@ -53,21 +64,28 @@ const SENDETAKT_MS = 60;
     :host {
       display: block;
       width: 100%;
+      height: 100%;
     }
 
     canvas {
       display: block;
       width: 100%;
-      aspect-ratio: 4 / 3;
-      border-radius: 10px;
+      height: 100%;
       background: #fff;
-      border: 1px solid var(--p-surface-300);
       touch-action: none;
       cursor: default;
+      border-radius: inherit;
     }
 
-    canvas.zeichnend {
+    canvas.malend {
       cursor: crosshair;
+    }
+
+    /* Der Eimer bekommt einen eigenen Zeiger: Beim Fuellen entscheidet ein
+       einzelner Klick ueber die halbe Flaeche, und man will vorher wissen,
+       dass man nicht im Stiftmodus ist. */
+    canvas.eimer {
+      cursor: cell;
     }
   `,
 })
@@ -75,14 +93,15 @@ export class Zeichenflaeche implements OnDestroy {
   private readonly leinwand = viewChild.required<ElementRef<HTMLCanvasElement>>('leinwand');
 
   readonly darfZeichnen = input(false);
+  readonly werkzeug = input<Malart>('strich');
   readonly farbe = input('#111827');
   readonly breite = input(4);
 
-  /** Neue Punkte eines Strichs, fertig zum Verschicken. */
-  readonly strich = output<Strich>();
+  /** Neue Punkte eines Malzugs, fertig zum Verschicken. */
+  readonly malzug = output<Malzug>();
 
-  private striche: Strich[] = [];
-  private laufend: Strich | null = null;
+  private zuege: Malzug[] = [];
+  private laufend: Malzug | null = null;
   /** Noch nicht verschickte Punkte des laufenden Strichs. */
   private ungesendet: number[] = [];
   private sendezeiger: ReturnType<typeof setTimeout> | null = null;
@@ -112,34 +131,51 @@ export class Zeichenflaeche implements OnDestroy {
 
   // ----- Von aussen --------------------------------------------------------
 
-  /** Setzt die ganze Zeichnung neu -- beim Betreten, nach Leeren und Rückgängig. */
-  setzen(striche: Strich[]): void {
-    this.striche = striche.map((s) => ({ ...s, punkte: [...s.punkte] }));
+  /** Setzt die ganze Zeichnung neu -- beim Betreten, nach Leeren und Zurück. */
+  setzen(zuege: Malzug[]): void {
+    this.zuege = zuege.map((z) => ({ ...z, art: z.art ?? 'strich', punkte: [...z.punkte] }));
     this.gezeichnet.clear();
     this.neuZeichnen();
   }
 
   /**
-   * Ergaenzt einen Strich um neue Punkte und malt nur diese nach.
-   * Kennt sie den Strich noch nicht, legt sie ihn an.
+   * Ergaenzt einen Strich um neue Punkte und malt nur diese nach, oder fuehrt
+   * eine Fuellung aus. Kennt sie den Malzug noch nicht, legt sie ihn an.
    */
-  ergaenzen(teil: Strich): void {
-    const vorhanden = this.striche.find((s) => s.id === teil.id);
+  ergaenzen(teil: Malzug): void {
+    const art = teil.art ?? 'strich';
 
+    if (art === 'fuellung') {
+      this.zuege.push({ ...teil, art, punkte: [...teil.punkte] });
+      this.fuellungAusfuehren(teil);
+      return;
+    }
+
+    const vorhanden = this.zuege.find((z) => z.id === teil.id);
     if (vorhanden) vorhanden.punkte.push(...teil.punkte);
-    else this.striche.push({ ...teil, punkte: [...teil.punkte] });
+    else this.zuege.push({ ...teil, art, punkte: [...teil.punkte] });
 
-    this.strichZeichnen(this.striche.find((s) => s.id === teil.id)!);
+    this.strichZeichnen(this.zuege.find((z) => z.id === teil.id)!);
   }
 
   leeren(): void {
     this.setzen([]);
   }
 
+  /** Nimmt den zuletzt gezeichneten Malzug zurueck. */
+  zurueck(): void {
+    this.zuege.pop();
+    this.gezeichnet.clear();
+    this.neuZeichnen();
+  }
+
   // ----- Zeichnen ----------------------------------------------------------
 
   private kontext(): CanvasRenderingContext2D | null {
-    return this.leinwand().nativeElement.getContext('2d');
+    // willReadFrequently: Der Farbeimer liest die Leinwand aus. Ohne den
+    // Hinweis haelt der Browser sie auf der Grafikkarte und muss sie fuer
+    // jedes Fuellen zurueckholen -- das kostet spuerbar.
+    return this.leinwand().nativeElement.getContext('2d', { willReadFrequently: true });
   }
 
   /**
@@ -151,9 +187,11 @@ export class Zeichenflaeche implements OnDestroy {
   private groesseAnpassen(): void {
     const element = this.leinwand().nativeElement;
     const rechteck = element.getBoundingClientRect();
-    if (rechteck.width === 0) return;
+    if (rechteck.width === 0 || rechteck.height === 0) return;
 
-    const dichte = window.devicePixelRatio || 1;
+    // Bei einer sehr grossen Flaeche auf einem Bildschirm mit hoher Dichte
+    // wird das Fuellen sonst traege: Es laeuft ueber jedes einzelne Pixel.
+    const dichte = Math.min(window.devicePixelRatio || 1, 2);
     element.width = Math.round(rechteck.width * dichte);
     element.height = Math.round(rechteck.height * dichte);
 
@@ -166,15 +204,34 @@ export class Zeichenflaeche implements OnDestroy {
     const element = this.leinwand().nativeElement;
     if (!ctx) return;
 
-    ctx.clearRect(0, 0, element.width, element.height);
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, element.width, element.height);
 
-    for (const strich of this.striche) this.strichZeichnen(strich);
+    // In der Reihenfolge, in der gemalt wurde: Eine Fuellung deckt zu, was
+    // vor ihr lag, und liegt unter allem, was danach kam.
+    for (const zug of this.zuege) {
+      if (zug.art === 'fuellung') this.fuellungAusfuehren(zug);
+      else this.strichZeichnen(zug);
+    }
+  }
+
+  private fuellungAusfuehren(zug: Malzug): void {
+    const ctx = this.kontext();
+    const element = this.leinwand().nativeElement;
+    if (!ctx || zug.punkte.length < 2) return;
+
+    fuellen(
+      ctx,
+      element.width,
+      element.height,
+      zug.punkte[0] * element.width,
+      zug.punkte[1] * element.height,
+      zug.farbe,
+    );
   }
 
   /** Malt nur den Teil eines Strichs, der noch nicht auf der Leinwand steht. */
-  private strichZeichnen(strich: Strich): void {
+  private strichZeichnen(strich: Malzug): void {
     const ctx = this.kontext();
     const element = this.leinwand().nativeElement;
     if (!ctx) return;
@@ -183,7 +240,7 @@ export class Zeichenflaeche implements OnDestroy {
     const fertig = this.gezeichnet.get(strich.id) ?? 0;
     if (punkte.length < 2 || fertig >= punkte.length) return;
 
-    const dichte = window.devicePixelRatio || 1;
+    const dichte = Math.min(window.devicePixelRatio || 1, 2);
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.strokeStyle = strich.farbe;
@@ -221,17 +278,36 @@ export class Zeichenflaeche implements OnDestroy {
   protected beginnen(event: PointerEvent): void {
     if (!this.darfZeichnen()) return;
 
+    const [x, y] = this.stelle(event);
+
+    // Der Eimer ist ein einzelner Klick, kein Zug: Er wird sofort ausgefuehrt
+    // und verschickt, und danach gibt es nichts mehr zu sammeln.
+    if (this.werkzeug() === 'fuellung') {
+      const zug: Malzug = {
+        id: crypto.randomUUID(),
+        art: 'fuellung',
+        farbe: this.farbe(),
+        breite: this.breite(),
+        punkte: [x, y],
+      };
+
+      this.zuege.push(zug);
+      this.fuellungAusfuehren(zug);
+      this.malzug.emit(zug);
+      return;
+    }
+
     this.leinwand().nativeElement.setPointerCapture(event.pointerId);
 
-    const [x, y] = this.stelle(event);
     this.laufend = {
       id: crypto.randomUUID(),
+      art: 'strich',
       farbe: this.farbe(),
       breite: this.breite(),
       punkte: [x, y],
     };
 
-    this.striche.push(this.laufend);
+    this.zuege.push(this.laufend);
     this.ungesendet = [x, y];
     this.strichZeichnen(this.laufend);
     this.sendenPlanen();
@@ -269,20 +345,14 @@ export class Zeichenflaeche implements OnDestroy {
 
     if (!this.laufend || this.ungesendet.length === 0) return;
 
-    this.strich.emit({
+    this.malzug.emit({
       id: this.laufend.id,
+      art: 'strich',
       farbe: this.laufend.farbe,
       breite: this.laufend.breite,
       punkte: this.ungesendet,
     });
 
     this.ungesendet = [];
-  }
-
-  /** Nimmt den zuletzt gezeichneten Strich zurueck. */
-  zurueck(): void {
-    this.striche.pop();
-    this.gezeichnet.clear();
-    this.neuZeichnen();
   }
 }

@@ -8,7 +8,7 @@ import { DialogModule } from 'primeng/dialog';
 import { InputTextModule } from 'primeng/inputtext';
 import { MessageModule } from 'primeng/message';
 import { ApiService } from '../../core/api.service';
-import { spielDefinition, type EinstellungsFeld } from '../../games/registry';
+import { nutztThemen, spielDefinition, type EinstellungsFeld } from '../../games/registry';
 import type { Partie, SpielArt, Thema } from '../../core/models';
 
 @Component({
@@ -36,6 +36,15 @@ export class Home {
   private readonly gewaehlterSlug = signal<string | null>(null);
   protected readonly gewaehlteThemen = signal<string[]>([]);
   protected readonly oeffentlich = signal(false);
+  protected readonly suche = signal('');
+
+  /**
+   * Ab wann die Auswahl ein Suchfeld bekommt.
+   *
+   * Bis zu einem halben Dutzend Kacheln findet man mit dem Auge schneller,
+   * als man tippen kann -- ein Feld waere dann nur ein Kasten mehr im Dialog.
+   */
+  private static readonly SUCHE_AB = 6;
 
   /**
    * Die Einstellungen einer Spielart stehen nicht im Formular, sondern werden
@@ -53,6 +62,26 @@ export class Home {
   protected readonly felder = computed<EinstellungsFeld[]>(
     () => spielDefinition(this.gewaehlterSlug() ?? '')?.felder ?? [],
   );
+
+  protected readonly sucheMoeglich = computed(() => this.spielarten().length > Home.SUCHE_AB);
+
+  /**
+   * Die Kacheln, die gerade dastehen.
+   *
+   * Gesucht wird in Name und Beschreibung: „zeichnen" soll Scribble finden,
+   * auch wenn das Wort im Namen nicht vorkommt.
+   */
+  protected readonly gefilterteArten = computed<SpielArt[]>(() => {
+    const suche = this.suche().trim().toLowerCase();
+    if (!suche) return this.spielarten();
+
+    return this.spielarten().filter((art) =>
+      `${art.name} ${art.description ?? ''}`.toLowerCase().includes(suche),
+    );
+  });
+
+  /** Themen gibt es nur bei Spielen, die Woerter daraus ziehen. */
+  protected readonly themenMoeglich = computed(() => nutztThemen(this.gewaehlterSlug() ?? ''));
 
   protected readonly anlegenForm = this.fb.nonNullable.group({
     name: ['', [Validators.required, Validators.maxLength(60)]],
@@ -89,6 +118,11 @@ export class Home {
     if (!slug) return;
 
     this.gewaehlterSlug.set(slug);
+
+    // Beim Wechsel auf ein Spiel ohne Themen die Auswahl leeren: Sonst gingen
+    // unsichtbar Etiketten mit, die der Server dann zurueckweist.
+    if (!nutztThemen(slug)) this.gewaehlteThemen.set([]);
+
     // Die Standardwerte gelten je Spielart: Beim Wechsel muss der Satz
     // komplett getauscht werden, sonst bliebe ein Feld des anderen Spiels stehen.
     this.einstellungswerte.set({
@@ -100,13 +134,36 @@ export class Home {
     return this.gewaehlterSlug() === slug;
   }
 
+  /**
+   * Zeichen und Art einer Kachel.
+   *
+   * Beide kommen aus der Spielbeschreibung im Browser, nicht aus `/api/games`:
+   * Der Server weiss, wie ein Spiel heisst und wie viele mitspielen -- wie es
+   * aussieht, geht ihn nichts an. Kennt die Oberflaeche eine Spielart noch
+   * nicht, bleibt ein neutrales Zeichen stehen, statt dass die Kachel fehlt.
+   */
+  protected zeichen(slug: string): string {
+    return spielDefinition(slug)?.icon ?? 'th-large';
+  }
+
+  protected zusammen(slug: string): boolean {
+    return spielDefinition(slug)?.art === 'zusammen';
+  }
+
   protected wert(key: string): unknown {
     return this.einstellungswerte()[key];
   }
 
   protected wertSetzen(feld: EinstellungsFeld, roh: unknown): void {
-    const wert = feld.typ === 'schalter' ? roh === true : Number(roh);
+    const wert =
+      feld.typ === 'schalter' ? roh === true : feld.typ === 'auswahl' ? String(roh) : Number(roh);
+
     this.einstellungswerte.update((alt) => ({ ...alt, [feld.key]: wert }));
+  }
+
+  /** Die Erklaerung unter einer Knopfreihe -- die der gewaehlten Moeglichkeit. */
+  protected optionsHilfe(feld: EinstellungsFeld): string | undefined {
+    return feld.optionen?.find((o) => o.wert === this.wert(feld.key))?.hilfe;
   }
 
   protected themaUmschalten(slug: string): void {
@@ -124,6 +181,7 @@ export class Home {
     this.anlegenForm.reset({ name: '' });
     this.gewaehlteThemen.set([]);
     this.oeffentlich.set(false);
+    this.suche.set('');
     this.artWaehlen(this.gewaehlterSlug() ?? this.spielarten()[0]?.slug ?? '');
     this.anlegenOffen.set(true);
   }

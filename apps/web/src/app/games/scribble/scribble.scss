@@ -1,64 +1,120 @@
-@use '../gemeinsam' as *;
+/* Die Staffelei.
+   Rundherum wird es dunkel, das Papier ist das einzige Helle im Bild -- so
+   wie in einem Atelier, in dem nur das Blatt beleuchtet ist. Die dunkle
+   Flaeche ist dieselbe, die Lobby und Buzzer schon benutzen: Scribble ist der
+   laute Raum in einem stillen Haus, aber erkennbar dasselbe Haus. */
 
 :host {
-  --platte: #151a23;
-  --platte-text: #f4f6fb;
-  /* Warnfarbe fuer die letzten Sekunden. Dieselbe Rolle wie das Rot des
-     Buzzers: Sie gehoert zur Handlung, nicht zur Dekoration. */
-  --knapp: #d31f3c;
+  --buehne: #12161f;
+  --buehne-hell: #1b2130;
+  --kreide: #f4f6fb;
+  --gedaempft: color-mix(in srgb, var(--kreide) 55%, transparent);
+  --linie: color-mix(in srgb, var(--kreide) 14%, transparent);
+  /* Die Luecken im gesuchten Wort brauchen mehr Kontrast als eine Trennlinie:
+     Sie sind das, was beim Raten abgezaehlt wird. */
+  --luecke: color-mix(in srgb, var(--kreide) 38%, transparent);
+  --knapp: #ff6b6b;
+  --treffer: #4ade80;
 
   display: block;
+
+  /* Aus der 960-px-Spalte der Seite ausbrechen. Eine Zeichenflaeche lebt von
+     ihrer Groesse, und geteilt mit einer Seitenleiste bliebe davon zu wenig.
+     Die Begrenzung auf die Fensterbreite verhindert, dass die Seite dabei
+     seitlich zu scrollen anfaengt. */
+  --stage-breite: min(1440px, 100vw - 2rem);
+  width: var(--stage-breite);
+  margin-inline: calc((100% - var(--stage-breite)) / 2);
 }
 
-/* ---------- Kopf ---------- */
+.buehne {
+  background: var(--buehne);
+  border-radius: 14px;
+  overflow: hidden;
+  color: var(--kreide);
+}
 
-.zugkopf {
+/* ---------- Wortleiste ---------- */
+
+.wortleiste {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 0.75rem 1rem;
-  border: 1px solid var(--p-surface-200);
-  border-bottom: 0;
-  border-radius: 10px 10px 0 0;
-  background: var(--p-surface-0);
+  gap: 1.5rem;
+  padding: 0.875rem 1.25rem;
 }
 
-.rundenzahl {
-  font-size: 0.8125rem;
-  color: var(--p-text-muted-color);
+.runde {
+  font-size: 0.875rem;
+  color: var(--gedaempft);
   white-space: nowrap;
+  flex: none;
+  min-width: 6rem;
+
+  .von {
+    opacity: 0.6;
+  }
 }
 
-/* Das gesuchte Wort ist das Einzige, worauf beim Raten alle schauen --
-   deshalb steht es mittig, gross und gesperrt. Die Sperrung ist hier nicht
-   Geschmack: Ohne sie laufen die Unterstriche zu einem Balken zusammen und
-   niemand kann die Buchstaben zaehlen. */
-.wort {
+.wortfeld {
   flex: 1;
-  text-align: center;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: clamp(1.125rem, 3.5vw, 1.75rem);
-  font-weight: 600;
-  letter-spacing: 0.3em;
-  text-indent: 0.3em;
-  min-height: 1.5em;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
 }
 
-.wort .wartet {
-  font-family: inherit;
-  font-size: 0.9375rem;
-  font-weight: 400;
-  letter-spacing: normal;
-  text-indent: 0;
-  color: var(--p-text-muted-color);
+.ansage {
+  font-size: 1rem;
+  color: var(--gedaempft);
+}
+
+/* Das gesuchte Wort ist das Einzige, worauf beim Raten alle schauen.
+   Je Zeichen ein Kaestchen statt einer Kette Unterstriche: Nur so sieht man,
+   welche Buchstaben schon aufgedeckt sind und wie viele noch fehlen. */
+.wort {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 0.3rem;
+}
+
+.zeichen {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.1em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: clamp(1.125rem, 2.2vw, 1.625rem);
+  font-weight: 600;
+  line-height: 1.2;
+  border-bottom: 2px solid transparent;
+
+  &.luecke {
+    border-bottom-color: var(--luecke);
+  }
+}
+
+/* Wortgrenze: ein Abstand, kein Zeichen. "Team Rocket" liest sich damit als
+   zwei Woerter, ohne dass ein Strich mehr dasteht. */
+.trenner {
+  width: 0.9em;
 }
 
 .uhr {
   font-variant-numeric: tabular-nums;
-  font-size: 1.25rem;
+  font-size: 1.5rem;
   font-weight: 700;
-  min-width: 2.5ch;
+  min-width: 4rem;
   text-align: right;
+  flex: none;
+  line-height: 1;
+
+  .einheit {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    opacity: 0.5;
+    margin-left: 0.1em;
+  }
 
   &.knapp {
     color: var(--knapp);
@@ -66,16 +122,17 @@
 }
 
 .balken {
-  height: 4px;
-  background: var(--p-surface-200);
-  overflow: hidden;
+  height: 3px;
+  background: color-mix(in srgb, var(--kreide) 8%, transparent);
 
   span {
     display: block;
     height: 100%;
     background: var(--p-primary-color);
-    /* Der Balken laeuft in Vierteln herein; ohne den Uebergang zuckt er. */
-    transition: width 250ms linear;
+    /* Skalieren statt die Breite zu aendern: Das laeuft auf der Grafikkarte
+       und kostet kein Neuberechnen des Layouts im Sekundentakt. */
+    transform-origin: left;
+    transition: transform 250ms linear;
 
     &.knapp {
       background: var(--knapp);
@@ -87,30 +144,35 @@
 
 .tisch {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 20rem;
-  gap: 1rem;
-  margin-top: 1rem;
+  grid-template-columns: minmax(0, 1fr) 19rem;
+  gap: 1.25rem;
+  padding: 1.25rem;
 }
 
-.links {
+.atelier {
   min-width: 0;
-}
-
-.rechts {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  min-width: 0;
+  gap: 0.875rem;
 }
 
-/* ---------- Leinwand ---------- */
-
-.leinwand-rahmen {
+/* Das Papier bekommt so viel Platz, wie die Fensterhoehe hergibt: Die Breite
+   wird aus der verfuegbaren Hoehe zurueckgerechnet, damit das Seitenverhaeltnis
+   stimmt und das Farbtablett trotzdem sichtbar bleibt. */
+.papier {
   position: relative;
+  width: min(100%, calc((100dvh - 17rem) * 1.6));
+  aspect-ratio: 16 / 10;
+  margin-inline: auto;
+  border-radius: 8px;
+  background: #fff;
+  /* Ein weiches Aussenlicht statt eines Rahmens -- das Blatt liegt auf der
+     Buehne, es ist nicht in sie eingelassen. */
+  box-shadow: 0 1.25rem 3rem rgb(0 0 0 / 45%);
 }
 
-/* Liegt ueber der Leinwand, statt sie zu ersetzen: So bleibt die Zeichnung
-   beim Aufloesen sichtbar und die Seite springt zwischen den Phasen nicht. */
+/* Liegt ueber dem Papier, statt es zu ersetzen: So bleibt die Zeichnung beim
+   Aufloesen sichtbar und die Seite springt zwischen den Phasen nicht. */
 .ueberlage {
   position: absolute;
   inset: 0;
@@ -119,9 +181,9 @@
   justify-items: center;
   gap: 0.75rem;
   padding: 1.5rem;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--platte) 88%, transparent);
-  color: var(--platte-text);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--buehne) 86%, transparent);
+  backdrop-filter: blur(2px);
   text-align: center;
 }
 
@@ -134,14 +196,14 @@
 .ueberlage-klein {
   margin: 0;
   font-size: 0.8125rem;
-  color: color-mix(in srgb, var(--platte-text) 65%, transparent);
+  color: var(--gedaempft);
 }
 
 .ueberlage-wort {
   margin: 0;
-  font-size: clamp(1.75rem, 7vw, 2.75rem);
+  font-size: clamp(2rem, 6vw, 3rem);
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
 }
 
 .wortwahl {
@@ -152,18 +214,19 @@
 }
 
 .wortknopf {
-  padding: 0.625rem 1.125rem;
+  padding: 0.7rem 1.25rem;
   border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--platte-text) 35%, transparent);
+  border: 1px solid color-mix(in srgb, var(--kreide) 30%, transparent);
   background: transparent;
-  color: var(--platte-text);
+  color: var(--kreide);
   font: inherit;
-  font-size: 1rem;
+  font-size: 1.0625rem;
   font-weight: 500;
   cursor: pointer;
+  transition: background 120ms ease;
 
   &:hover {
-    background: color-mix(in srgb, var(--platte-text) 14%, transparent);
+    background: color-mix(in srgb, var(--kreide) 14%, transparent);
   }
 }
 
@@ -172,8 +235,8 @@
   margin: 0.25rem 0 0;
   padding: 0;
   display: grid;
-  gap: 0.25rem;
-  min-width: 12rem;
+  gap: 0.3rem;
+  min-width: 13rem;
 
   li {
     display: flex;
@@ -188,114 +251,233 @@
   .plus {
     font-variant-numeric: tabular-nums;
     font-weight: 600;
-    color: #4ade80;
+    color: var(--treffer);
   }
 }
 
-/* ---------- Werkzeuge ---------- */
+/* ---------- Farbtablett ---------- */
 
-.werkzeuge {
+.tablett {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 1rem;
-  margin-top: 0.75rem;
+  gap: 0.75rem;
+  padding: 0.625rem 0.875rem;
+  border-radius: 999px;
+  background: var(--buehne-hell);
+  margin-inline: auto;
+  max-width: 100%;
+}
+
+.trennstrich {
+  width: 1px;
+  align-self: stretch;
+  background: var(--linie);
 }
 
 .farbwahl {
-  display: flex;
-  gap: 0.375rem;
+  display: grid;
+  grid-template-columns: repeat(6, auto);
+  gap: 0.3rem;
 }
 
 .farbe {
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 1.4rem;
+  height: 1.4rem;
   border-radius: 50%;
   border: 2px solid transparent;
-  box-shadow: 0 0 0 1px var(--p-surface-300);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 25%);
   cursor: pointer;
   padding: 0;
 
   &.aktiv {
-    border-color: var(--p-surface-0);
-    box-shadow: 0 0 0 2px var(--p-text-color);
+    border-color: var(--kreide);
   }
 }
 
 .breitwahl {
   display: flex;
-  gap: 0.25rem;
+  gap: 0.2rem;
 }
 
 .breite {
-  width: 2rem;
-  height: 2rem;
+  width: 2.1rem;
+  height: 2.1rem;
   display: grid;
   place-items: center;
-  border-radius: 6px;
-  border: 1px solid var(--p-surface-300);
-  background: var(--p-surface-0);
+  border-radius: 8px;
+  border: 0;
+  background: transparent;
   cursor: pointer;
 
   span {
     display: block;
     border-radius: 50%;
-    background: var(--p-text-color);
+    background: var(--kreide);
+    opacity: 0.75;
   }
 
   &.aktiv {
-    border-color: var(--p-primary-color);
+    background: color-mix(in srgb, var(--kreide) 14%, transparent);
+
+    span {
+      opacity: 1;
+    }
   }
 }
 
-.werkzeug-knoepfe {
+.werkzeugwahl,
+.tablett-ende {
   display: flex;
   gap: 0.25rem;
+}
+
+.tablett-ende {
   margin-left: auto;
 }
 
-.hinweiszeile {
-  margin: 0.75rem 0 0;
-  font-size: 0.875rem;
-  color: var(--p-text-muted-color);
-  display: flex;
+.werkzeug {
+  display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--gedaempft);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+
+  i {
+    font-size: 0.8125rem;
+  }
+
+  &:hover {
+    color: var(--kreide);
+    background: color-mix(in srgb, var(--kreide) 8%, transparent);
+  }
+
+  &.aktiv {
+    color: var(--buehne);
+    background: var(--kreide);
+  }
 }
 
-/* ---------- Punkte und Chat ---------- */
+.zuschauerzeile {
+  margin: 0;
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--gedaempft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
 
-.leute li {
-  padding: 0.25rem 0.5rem;
-  margin: 0 -0.5rem;
-  border-radius: 6px;
+  i {
+    color: var(--treffer);
+  }
+}
+
+/* ---------- Schiene ---------- */
+
+.schiene {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.tafel {
+  background: var(--buehne-hell);
+  border-radius: 10px;
+  padding: 0.875rem 1rem;
+
+  h2 {
+    margin: 0 0 0.75rem;
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    font-weight: 600;
+    color: var(--gedaempft);
+  }
+}
+
+.leute {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.15rem;
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 0.4rem;
+    margin-inline: -0.4rem;
+    border-radius: 6px;
+    font-size: 0.9375rem;
+  }
 
   /* Wer gerade zeichnet und wer das Wort schon hat, sind die beiden Dinge,
      die man im Blick behalten will -- alles andere bleibt farblos. */
-  &.dran {
-    background: color-mix(in srgb, var(--p-primary-color) 10%, transparent);
+  .dran {
+    background: color-mix(in srgb, var(--p-primary-color) 22%, transparent);
   }
 
-  &.hat .name {
-    color: #16a34a;
+  .hat .name {
+    color: var(--treffer);
   }
 
   .name {
-    display: flex;
-    align-items: center;
-    gap: 0.375rem;
+    margin-right: auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
+
+  .punkte {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+}
+
+.rolle {
+  width: 1rem;
+  display: grid;
+  place-items: center;
+  flex: none;
 
   i {
     font-size: 0.75rem;
   }
 }
 
-.chatkarte {
+.punkt {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--kreide) 25%, transparent);
+
+  &.an {
+    background: var(--treffer);
+  }
+}
+
+.zuwachs {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--treffer);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Tipps ---------- */
+
+.tipps {
   display: flex;
   flex-direction: column;
   flex: 1;
-  min-height: 16rem;
+  min-height: 15rem;
 }
 
 .chat {
@@ -304,12 +486,12 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.375rem;
+  gap: 0.3rem;
   /* Neueste unten, wie in jedem Chat: Deshalb faengt die Liste am Boden an. */
   justify-content: flex-end;
   flex: 1;
   overflow-y: auto;
-  max-height: 18rem;
+  max-height: 22rem;
   font-size: 0.875rem;
 
   li {
@@ -321,6 +503,7 @@
   .wer {
     font-weight: 600;
     flex: none;
+    color: var(--gedaempft);
   }
 
   .was {
@@ -328,19 +511,19 @@
   }
 
   .system {
-    color: var(--p-text-muted-color);
+    color: var(--gedaempft);
     font-style: italic;
   }
 
   .treffer {
-    color: #16a34a;
+    color: var(--treffer);
     font-weight: 600;
   }
 
   .intern {
     margin-left: auto;
     font-size: 0.6875rem;
-    color: var(--p-text-muted-color);
+    color: var(--gedaempft);
     flex: none;
   }
 }
@@ -352,12 +535,16 @@
   input {
     flex: 1;
     min-width: 0;
-    padding: 0.5rem 0.75rem;
-    border: 1px solid var(--p-surface-300);
+    padding: 0.5rem 0.7rem;
+    border: 1px solid var(--linie);
     border-radius: 8px;
-    background: var(--p-surface-0);
-    color: var(--p-text-color);
+    background: color-mix(in srgb, #000 20%, transparent);
+    color: var(--kreide);
     font: inherit;
+
+    &::placeholder {
+      color: color-mix(in srgb, var(--kreide) 35%, transparent);
+    }
 
     &:focus {
       outline: 2px solid var(--p-primary-color);
@@ -367,18 +554,72 @@
   }
 }
 
-@media (max-width: 900px) {
+.senden {
+  width: 2.35rem;
+  border: 0;
+  border-radius: 8px;
+  background: var(--p-primary-color);
+  color: #fff;
+  cursor: pointer;
+  flex: none;
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+}
+
+/* ---------- Schmale Fenster ---------- */
+
+@media (max-width: 1100px) {
+  :host {
+    width: auto;
+    margin-inline: 0;
+  }
+
   .tisch {
     grid-template-columns: 1fr;
   }
 
+  /* Ohne Seitenleiste darf das Papier die volle Breite nehmen; die Hoehe
+     begrenzt es dann nicht mehr, weil darunter gescrollt werden kann. */
+  .papier {
+    width: 100%;
+  }
+
   .chat {
-    max-height: 12rem;
+    max-height: 13rem;
+  }
+}
+
+@media (max-width: 620px) {
+  .wortleiste {
+    gap: 0.75rem;
+    padding: 0.75rem 0.875rem;
+  }
+
+  .runde {
+    min-width: 0;
+    font-size: 0.75rem;
+  }
+
+  .tisch {
+    padding: 0.875rem;
+  }
+
+  .tablett {
+    border-radius: 12px;
+    justify-content: center;
+  }
+
+  .tablett-ende {
+    margin-left: 0;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .balken span {
+  .balken span,
+  .wortknopf {
     transition: none;
   }
 }

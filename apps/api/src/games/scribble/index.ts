@@ -31,9 +31,20 @@ export type ScribbleEinstellungen = z.infer<typeof einstellungen>;
 
 export type Phase = 'WORTWAHL' | 'ZEICHNEN' | 'ZUGENDE' | 'ENDE';
 
-/** Ein Pinselstrich in normierten Koordinaten (0..1), abwechselnd x und y. */
-interface Strich {
+/**
+ * Ein Malzug in normierten Koordinaten (0..1), abwechselnd x und y.
+ *
+ * Zwei Arten teilen sich die Form: Ein `strich` sammelt seine Punkte ueber die
+ * Zeit, eine `fuellung` hat genau einen -- die Stelle, an der der Farbeimer
+ * ausgekippt wurde. Beide stehen in derselben Liste, weil ihre Reihenfolge
+ * zaehlt: Wer zuerst fuellt und dann zeichnet, bekommt ein anderes Bild als
+ * umgekehrt.
+ */
+type Malart = 'strich' | 'fuellung';
+
+interface Malzug {
   id: string;
+  art: Malart;
   farbe: string;
   breite: number;
   punkte: number[];
@@ -62,7 +73,9 @@ interface Zug {
   endetUm: number;
   /** Wie lange die laufende Phase insgesamt dauert -- fuer den Balken. */
   dauerMs: number;
-  striche: Strich[];
+  striche: Malzug[];
+  /** Wie viele ueberhaupt raten koennen -- der Zeichner zaehlt nicht mit. */
+  ratende: number;
   /** userId -> Platz beim Raten, nullbasiert. */
   richtig: Map<string, number>;
   /** Aufgedeckte Buchstabenstellen. */
@@ -119,7 +132,7 @@ function zahl(partie: PartieInfo, feld: keyof ScribbleEinstellungen, ersatz: num
   return Number.isFinite(wert) ? wert : ersatz;
 }
 
-function punkteAnzahl(striche: Strich[]): number {
+function punkteAnzahl(striche: Malzug[]): number {
   return striche.reduce((summe, s) => summe + s.punkte.length, 0);
 }
 
@@ -229,6 +242,9 @@ async function zugStarten(code: string, partie: PartieInfo): Promise<void> {
     endetUm: Date.now() + WAHLZEIT_MS,
     dauerMs: WAHLZEIT_MS,
     striche: [],
+    // Steht fuer den ganzen Zug fest: Waehrend eine Partie laeuft, kommt
+    // niemand dazu und niemand geht -- die Staffelung bleibt damit stabil.
+    ratende: partie.spieler.filter((s) => s.userId !== zeichnerId).length,
     richtig: new Map(),
     aufgedeckt: [],
     ergebnis: null,
@@ -273,7 +289,9 @@ async function zugBeenden(code: string, partie: PartieInfo): Promise<void> {
   const fuerZeichner = zeichnerPunkte(basis, zug.richtig.size);
 
   const ergebnis: Record<string, number> = {};
-  for (const [userId, platz] of zug.richtig) ergebnis[userId] = ratePunkte(basis, platz);
+  for (const [userId, platz] of zug.richtig) {
+    ergebnis[userId] = ratePunkte(basis, platz, zug.ratende);
+  }
 
   if (fuerZeichner > 0) {
     ergebnis[zug.zeichnerId] = fuerZeichner;
@@ -324,12 +342,20 @@ async function naechsterZug(code: string, partie: PartieInfo): Promise<void> {
 
 // ---------- Ereignisse ------------------------------------------------------
 
-const strichSchema = z.object({
-  id: z.string().min(1).max(64),
-  farbe: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Farbe muss ein Hex-Wert sein'),
-  breite: z.coerce.number().min(1).max(64),
-  punkte: z.array(z.number().min(-0.1).max(1.1)).min(2).max(512),
-});
+const malzugSchema = z
+  .object({
+    id: z.string().min(1).max(64),
+    // Aeltere Fassungen der Oberflaeche schicken keine Art mit; die meinten
+    // immer einen Strich.
+    art: z.enum(['strich', 'fuellung']).default('strich'),
+    farbe: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Farbe muss ein Hex-Wert sein'),
+    breite: z.coerce.number().min(1).max(64),
+    punkte: z.array(z.number().min(-0.1).max(1.1)).min(2).max(512),
+  })
+  // Eine Fuellung hat genau eine Stelle -- die, auf die geklickt wurde.
+  .refine((z) => z.art !== 'fuellung' || z.punkte.length === 2, {
+    message: 'Eine Füllung braucht genau einen Punkt',
+  });
 
 const wortWahlSchema = z.object({ wort: z.string().min(1).max(64) });
 const rateSchema = z.object({ text: z.string().trim().min(1).max(80) });
@@ -464,18 +490,19 @@ export const scribble: SpielModul = {
       const l = live(ctx.code);
       if (!l?.zug || l.phase !== 'ZEICHNEN' || l.zug.zeichnerId !== ctx.userId) return;
 
-      const geprueft = strichSchema.safeParse(nutzlast);
+      const geprueft = malzugSchema.safeParse(nutzlast);
       if (!geprueft.success) return;
 
-      const { id, farbe, breite, punkte } = geprueft.data;
-      const vorhanden = l.zug.striche.find((s) => s.id === id);
+      const { id, art, farbe, breite, punkte } = geprueft.data;
+      // Eine Fuellung wird nie ergaenzt; nur ein Strich waechst ueber die Zeit.
+      const vorhanden = art === 'strich' ? l.zug.striche.find((s) => s.id === id) : undefined;
 
       if (vorhanden) {
         if (punkteAnzahl(l.zug.striche) > MAX_PUNKTE) return;
         vorhanden.punkte.push(...punkte);
       } else {
         if (l.zug.striche.length >= MAX_STRICHE) return;
-        l.zug.striche.push({ id, farbe, breite, punkte: [...punkte] });
+        l.zug.striche.push({ id, art, farbe, breite, punkte: [...punkte] });
       }
 
       // Geht als kleines Stueck weiter statt als ganzer Zustand: waehrend des
@@ -541,7 +568,10 @@ export const scribble: SpielModul = {
 
         // Punkte sofort in die Datenbank: sie sind das Einzige aus der
         // laufenden Partie, das einen Neustart der API ueberleben muss.
-        await ctx.punkteGeben(ctx.userId, ratePunkte(zahl(partie, 'punkteBasis', 100), platz));
+        await ctx.punkteGeben(
+          ctx.userId,
+          ratePunkte(zahl(partie, 'punkteBasis', 100), platz, zug.ratende),
+        );
 
         melden(l, {
           userId: ctx.userId,
@@ -552,8 +582,7 @@ export const scribble: SpielModul = {
         });
 
         // Haben es alle ausser dem Zeichner, braucht niemand mehr zu zeichnen.
-        const ratende = partie.spieler.filter((s) => s.userId !== zug.zeichnerId).length;
-        if (zug.richtig.size >= ratende) {
+        if (zug.richtig.size >= zug.ratende) {
           await zugBeenden(ctx.code, partie);
           return;
         }

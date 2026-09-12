@@ -1,0 +1,225 @@
+/* Die Unterlagen.
+   Sie sollen wie Papier wirken, nicht wie eine Bedienoberflaeche: nichts
+   blinkt, nichts laesst sich druecken. Wer hier sitzt, liest vor. */
+
+:host {
+  display: block;
+  color: var(--kreide, #e8edf5);
+}
+
+.blatt {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  align-items: center;
+}
+
+.blatt-kopf {
+  margin: 0;
+  max-width: 40rem;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--gedaempft, #8b96a8);
+  text-align: center;
+
+  strong {
+    color: var(--kreide, #e8edf5);
+    font-weight: 600;
+  }
+}
+
+.blatt-fuss {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--gedaempft, #8b96a8);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+
+  &.dran {
+    color: var(--signal, #f0b429);
+  }
+}
+
+/* ---------- Regeln und Codestellen ---------- */
+
+.regeln {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: min(100%, 40rem);
+  display: grid;
+  gap: 0.5rem;
+
+  li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.75rem 0.875rem;
+    border-radius: 10px;
+    background: var(--platte-hell, #1e2733);
+    border-left: 3px solid color-mix(in srgb, var(--signal, #f0b429) 60%, transparent);
+  }
+}
+
+/* Die Nummer ist keine Verzierung: Beim Sicherungskasten entscheidet sie,
+   wer zuerst dran ist, beim Zahlenschloss, wohin die Ziffer gehoert. */
+.regel-nr {
+  flex: none;
+  min-width: 1.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--signal, #f0b429);
+  text-align: right;
+}
+
+.regel-text {
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+/* ---------- Symbolspalten ---------- */
+
+.spalten {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+.spalte {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 0.5rem;
+  border-radius: 10px;
+  background: var(--platte-hell, #1e2733);
+  min-width: 4.5rem;
+
+  ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.35rem;
+    font-family: 'Segoe UI Symbol', 'Apple Symbols', 'Noto Sans Symbols2', serif;
+    font-size: 1.625rem;
+    line-height: 1.1;
+    text-align: center;
+  }
+}
+
+.spalte-nr {
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gedaempft, #8b96a8);
+}
+
+/* ---------- Kartenstreifen ---------- */
+
+.raster {
+  display: grid;
+  grid-template-columns: repeat(var(--spalten), 1fr);
+  width: min(100%, 24rem);
+  aspect-ratio: 1;
+  border: 2px solid color-mix(in srgb, var(--kreide, #e8edf5) 45%, transparent);
+  border-radius: 4px;
+  background: var(--buehne, #0d1117);
+}
+
+.feld {
+  position: relative;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  /* Durchsichtig, bis eine Wand da ist -- sonst haetten Felder mit und ohne
+     Wand verschiedene Groessen und das Raster liefe schief. */
+  border-right: 2px solid transparent;
+  border-bottom: 2px solid transparent;
+
+  i {
+    font-size: 0.75rem;
+    color: var(--gut, #4ade80);
+  }
+}
+
+.wand-rechts {
+  border-right-color: color-mix(in srgb, var(--kreide, #e8edf5) 70%, transparent);
+}
+
+.wand-unten {
+  border-bottom-color: color-mix(in srgb, var(--kreide, #e8edf5) 70%, transparent);
+}
+
+/* Fremde Zeilen bleiben im Bild, aber ohne Inhalt: Man soll sehen, wo der
+   Melder ist, auch wenn man dort nichts weiss. */
+.fremd {
+  background: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 4px,
+    color-mix(in srgb, var(--kreide, #e8edf5) 4%, transparent) 4px,
+    color-mix(in srgb, var(--kreide, #e8edf5) 4%, transparent) 8px
+  );
+}
+
+.feld.ziel {
+  background: color-mix(in srgb, var(--gut, #4ade80) 14%, transparent);
+}
+
+/* Sensorfelder: schraffiert statt flaechig, damit sie nicht mit einer Wand
+   verwechselt werden -- und in Alarmrot, das sonst nirgends vorkommt. */
+.feld.sensor {
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 3px,
+    color-mix(in srgb, var(--alarm, #ff5d5d) 45%, transparent) 3px,
+    color-mix(in srgb, var(--alarm, #ff5d5d) 45%, transparent) 6px
+  );
+}
+
+/* Einer, der schon angesprochen hat. Den sieht ab dann auch das Pult. */
+.feld.alarm {
+  background: color-mix(in srgb, var(--alarm, #ff5d5d) 30%, transparent);
+
+  i {
+    color: var(--alarm, #ff5d5d);
+    font-size: 0.625rem;
+  }
+}
+
+/* Eine Stelle, die auf andere Stellen zeigt: Sie ist erst zu rechnen, wenn
+   zwei andere geliefert haben -- und wer das uebersieht, wartet auf niemanden. */
+.regeln li.verkettet {
+  border-left-color: var(--alarm, #ff5d5d);
+}
+
+.wink {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--alarm, #ff5d5d);
+}
+
+.melder {
+  position: absolute;
+  width: 45%;
+  height: 45%;
+  border-radius: 50%;
+  background: var(--signal, #f0b429);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal, #f0b429) 25%, transparent);
+}
+
+@media (max-width: 620px) {
+  .spalte ol {
+    font-size: 1.375rem;
+  }
+
+  .regel-text {
+    font-size: 0.875rem;
+  }
+}

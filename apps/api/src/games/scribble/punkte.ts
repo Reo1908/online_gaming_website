@@ -7,19 +7,32 @@
  * und es belohnt dasselbe: schnell erkennen.
  */
 
-/** Wie viel jeder weitere Platz von der Basis abzieht. */
-const ABZUG_JE_PLATZ = 0.2;
-/** Auch der Letzte bekommt noch so viel von der Basis. */
+/** Was der Letzte, der es noch errät, von der Basis bekommt. */
 const MINDESTANTEIL = 0.4;
 /** Was der Zeichner je errautem Wort bekommt -- gedeckelt bei der Basis. */
 const ZEICHNER_ANTEIL = 0.25;
 
 /**
  * Punkte fuer den, der richtig geraten hat.
- * `platz` ist nullbasiert: 0 fuer den Ersten.
+ *
+ * Der Erste bekommt die volle Basis, der Letzte 40 %, alle dazwischen
+ * gleichmaessig gestaffelt. Die Stufe haengt also an der Rundengroesse und
+ * nicht an einer festen Zahl.
+ *
+ * Der Grund: Bei einem festen Abzug je Platz -- etwa 20 Punkte -- stiesse eine
+ * grosse Runde nach vier Leuten auf den Mindestanteil, und ab da bekaeme jeder
+ * dasselbe. Genau dort ist die Reihenfolge aber noch spannend.
+ *
+ * `platz` ist nullbasiert: 0 fuer den Ersten. `ratende` ist, wie viele
+ * ueberhaupt raten konnten -- der Zeichner zaehlt nicht mit.
  */
-export function ratePunkte(basis: number, platz: number): number {
-  const anteil = Math.max(MINDESTANTEIL, 1 - platz * ABZUG_JE_PLATZ);
+export function ratePunkte(basis: number, platz: number, ratende: number): number {
+  // Bei nur einem Ratenden gibt es nichts zu staffeln.
+  if (ratende <= 1) return Math.max(1, Math.round(basis));
+
+  const stufe = (1 - MINDESTANTEIL) / (ratende - 1);
+  const anteil = Math.max(MINDESTANTEIL, 1 - platz * stufe);
+
   return Math.max(1, Math.round(basis * anteil));
 }
 

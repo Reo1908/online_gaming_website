@@ -1,8 +1,8 @@
 <section class="start">
   <h1>Spielt zusammen.</h1>
   <p class="untertitel">
-    Eine Lobby öffnen, den Code weitergeben, losspielen. Buzzern, wer die Antwort zuerst weiß —
-    oder zeichnen und raten lassen.
+    Eine Lobby öffnen, den Code weitergeben, losspielen. Gegeneinander buzzern, zeichnen und
+    raten — oder zusammen aus einem verriegelten Sektor ausbrechen.
   </p>
 
   <div class="einstieg">
@@ -93,21 +93,56 @@
       <p-message severity="error" [text]="meldung" styleClass="voll" />
     }
 
+    <!-- Die Spielauswahl als Kacheln: Mit jedem neuen Spiel waechst sie in die
+         Breite statt in die Laenge, und die Beschreibung steht nur einmal da --
+         die des gewaehlten. Untereinander gestapelt braeuchte derselbe Dialog
+         bei sechs Spielen doppelt so viel Platz, wie ein Fenster hoch ist. -->
     <fieldset class="spiele">
       <legend>Spiel</legend>
 
-      @for (art of spielarten(); track art.slug) {
-        <button
-          type="button"
-          class="spiel"
-          [class.aktiv]="istGewaehlt(art.slug)"
-          [attr.aria-pressed]="istGewaehlt(art.slug)"
-          (click)="artWaehlen(art.slug)"
-        >
-          <span class="spiel-name">{{ art.name }}</span>
-          <span class="spiel-text">{{ art.description }}</span>
-          <span class="spiel-zahl">{{ art.minPlayers }}–{{ art.maxPlayers }} Mitspieler</span>
-        </button>
+      @if (sucheMoeglich()) {
+        <div class="suchfeld">
+          <i class="pi pi-search" aria-hidden="true"></i>
+          <input
+            type="search"
+            aria-label="Spiel suchen"
+            placeholder="Spiel suchen …"
+            autocomplete="off"
+            [value]="suche()"
+            (input)="suche.set($any($event.target).value)"
+          />
+        </div>
+      }
+
+      <div class="spielraster">
+        @for (art of gefilterteArten(); track art.slug) {
+          <button
+            type="button"
+            class="spiel"
+            [class.aktiv]="istGewaehlt(art.slug)"
+            [attr.aria-pressed]="istGewaehlt(art.slug)"
+            (click)="artWaehlen(art.slug)"
+          >
+            <span class="spiel-zeichen" aria-hidden="true">
+              <i class="pi pi-{{ zeichen(art.slug) }}"></i>
+            </span>
+
+            <span class="spiel-name">{{ art.name }}</span>
+
+            <span class="spiel-meta">
+              <span class="spiel-art" [class.zusammen]="zusammen(art.slug)">
+                {{ zusammen(art.slug) ? 'Zusammen' : 'Gegeneinander' }}
+              </span>
+              <span class="spiel-zahl">{{ art.minPlayers }}–{{ art.maxPlayers }}</span>
+            </span>
+          </button>
+        } @empty {
+          <p class="hilfe">Kein Spiel passt zu „{{ suche() }}".</p>
+        }
+      </div>
+
+      @if (gewaehlteArt(); as art) {
+        <p class="spiel-text">{{ art.description }}</p>
       }
     </fieldset>
 
@@ -159,7 +194,31 @@
         <legend>Einstellungen</legend>
 
         @for (feld of felder(); track feld.key) {
-          @if (feld.typ === 'zahl') {
+          <!-- Knopfreihe statt Klappliste: Bei zwei Moeglichkeiten stehen
+               beide zugleich da, und darunter, was der Unterschied ist. -->
+          @if (feld.typ === 'auswahl') {
+            <div class="feld">
+              <label>{{ feld.label }}</label>
+
+              <div class="reihe" role="group" [attr.aria-label]="feld.label">
+                @for (o of feld.optionen ?? []; track o.wert) {
+                  <button
+                    type="button"
+                    class="stufe"
+                    [class.aktiv]="wert(feld.key) === o.wert"
+                    [attr.aria-pressed]="wert(feld.key) === o.wert"
+                    (click)="wertSetzen(feld, o.wert)"
+                  >
+                    {{ o.label }}
+                  </button>
+                }
+              </div>
+
+              @if (optionsHilfe(feld); as hilfe) {
+                <small>{{ hilfe }}</small>
+              }
+            </div>
+          } @else if (feld.typ === 'zahl') {
             <div class="feld">
               <label [attr.for]="'feld-' + feld.key">{{ feld.label }}</label>
               <input
@@ -194,37 +253,35 @@
       </fieldset>
     }
 
-    <fieldset class="optionen">
-      <legend>Themen</legend>
+    @if (themenMoeglich()) {
+      <fieldset class="optionen">
+        <legend>Themen</legend>
 
-      @if (themen().length > 0) {
-        <p class="hilfe">
-          @if (gewaehlteArt()?.brauchtThemen) {
+        @if (themen().length > 0) {
+          <p class="hilfe">
             Bestimmt, aus welchen Wörtern gezogen wird. Ohne Auswahl zählen alle.
-          } @else {
-            Sagt anderen, worum es in der Runde geht. Lässt sich später ändern.
-          }
-        </p>
+          </p>
 
-        <div class="etiketten waehlbar">
-          @for (t of themen(); track t.slug) {
-            <button
-              type="button"
-              class="etikett"
-              [class.aktiv]="themaGewaehlt(t.slug)"
-              [style.--farbe]="t.farbe"
-              [attr.aria-pressed]="themaGewaehlt(t.slug)"
-              (click)="themaUmschalten(t.slug)"
-            >
-              {{ t.name }}
-              <span class="anzahl">{{ t.woerter }}</span>
-            </button>
-          }
-        </div>
-      } @else {
-        <p class="hilfe">Es gibt noch keine Themen. Ein Administrator legt sie an.</p>
-      }
-    </fieldset>
+          <div class="etiketten waehlbar">
+            @for (t of themen(); track t.slug) {
+              <button
+                type="button"
+                class="etikett"
+                [class.aktiv]="themaGewaehlt(t.slug)"
+                [style.--farbe]="t.farbe"
+                [attr.aria-pressed]="themaGewaehlt(t.slug)"
+                (click)="themaUmschalten(t.slug)"
+              >
+                {{ t.name }}
+                <span class="anzahl">{{ t.woerter }}</span>
+              </button>
+            }
+          </div>
+        } @else {
+          <p class="hilfe">Es gibt noch keine Themen. Ein Administrator legt sie an.</p>
+        }
+      </fieldset>
+    }
 
     <div class="dialog-aktionen">
       <p-button

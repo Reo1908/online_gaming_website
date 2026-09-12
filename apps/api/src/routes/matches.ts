@@ -105,8 +105,16 @@ function belegt(partie: PartieRoh): number {
  * Ein unbekanntes oder abgeschaltetes Etikett ist ein Fehler und wird nicht
  * still verschluckt: Sonst spielte jemand mit einem Wortvorrat, den er so
  * nicht ausgewaehlt hat.
+ *
+ * `slug` ist die Spielart: Themen gehoeren nur zu Spielen, die Woerter daraus
+ * ziehen. Am Buzzer waeren sie ein Etikett ohne Wirkung -- und ein Schalter,
+ * der nichts tut, ist schlimmer als keiner.
  */
-async function etikettenAufloesen(slugs: string[]): Promise<string[]> {
+async function etikettenAufloesen(slugs: string[], spielSlug: string): Promise<string[]> {
+  if (slugs.length > 0 && !spielart(spielSlug)?.brauchtWoerter) {
+    throw new PartieFehler(400, 'Diese Spielart arbeitet nicht mit Themen');
+  }
+
   if (slugs.length === 0) return [];
 
   const eindeutig = [...new Set(slugs)];
@@ -146,18 +154,12 @@ export async function matchRoutes(app: FastifyInstance): Promise<void> {
       orderBy: { name: 'asc' },
     });
 
-    return aktive.map((spiel) => {
-      const art = spielart(spiel.slug);
-      return {
-        ...spiel,
-        // Ohne diese Vorgaben muesste das Formular die Standardwerte selbst
-        // kennen -- dann staenden sie an zwei Stellen und liefen auseinander.
-        standardEinstellungen: standardEinstellungen(spiel.slug),
-        // Scribble zieht seine Woerter aus den Themen, der Buzzer nicht. Die
-        // Lobby blendet die Auswahl danach ein oder aus.
-        brauchtThemen: art?.brauchtWoerter ?? false,
-      };
-    });
+    return aktive.map((spiel) => ({
+      ...spiel,
+      // Ohne diese Vorgaben muesste das Formular die Standardwerte selbst
+      // kennen -- dann staenden sie an zwei Stellen und liefen auseinander.
+      standardEinstellungen: standardEinstellungen(spiel.slug),
+    }));
   });
 
   /** Die Themengebiete, aus denen eine Lobby waehlen kann. */
@@ -243,7 +245,7 @@ export async function matchRoutes(app: FastifyInstance): Promise<void> {
     }
 
     try {
-      const tagIds = await etikettenAufloesen(etiketten ?? []);
+      const tagIds = await etikettenAufloesen(etiketten ?? [], gameSlug);
 
       // Bei einer Kollision einfach neu wuerfeln. Bei 32^6 Moeglichkeiten und
       // einer Handvoll offener Lobbys passiert das praktisch nie.
@@ -332,7 +334,7 @@ export async function matchRoutes(app: FastifyInstance): Promise<void> {
       statusPruefen(partie, 'LOBBY', 'Die Lobby lässt sich nur vor dem Start einstellen');
 
       const { name, oeffentlich, etiketten } = parsed.data;
-      const tagIds = etiketten ? await etikettenAufloesen(etiketten) : null;
+      const tagIds = etiketten ? await etikettenAufloesen(etiketten, partie.game.slug) : null;
 
       const geaendert = await prisma.$transaction(async (tx) => {
         if (tagIds) {

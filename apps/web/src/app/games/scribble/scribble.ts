@@ -9,10 +9,9 @@ import {
   OnDestroy,
   OnInit,
 } from '@angular/core';
-import { ButtonModule } from 'primeng/button';
 import { RealtimeService } from '../../core/realtime.service';
 import type { LiveTeilnehmer, LiveZustand } from '../../core/models';
-import { Zeichenflaeche, type Strich } from './zeichenflaeche';
+import { Zeichenflaeche, type Malart, type Malzug } from './zeichenflaeche';
 
 export type Phase = 'WORTWAHL' | 'ZEICHNEN' | 'ZUGENDE' | 'ENDE';
 
@@ -44,23 +43,34 @@ interface ScribbleZustand {
   ergebnis: Record<string, number> | null;
 }
 
-/** Die Palette. Acht Farben reichen -- mehr macht die Leiste unuebersichtlich. */
+/**
+ * Die Palette.
+ *
+ * Zwoelf Farben in zwei Reihen: genug fuer ein Bild mit Haut-, Himmel- und
+ * Holztoenen, und immer noch wenige genug, dass die Wahl nicht aufhaelt.
+ * Weiss ist kein Radiergummi im eigenen Sinn -- es ist die Papierfarbe, und
+ * damit tut ein weisser Strich genau das, was man erwartet.
+ */
 const FARBEN = [
   '#111827',
-  '#ffffff',
+  '#6b7280',
   '#ef4444',
+  '#f97316',
   '#f59e0b',
   '#22c55e',
+  '#0ea5e9',
   '#3b82f6',
   '#a855f7',
+  '#ec4899',
   '#92400e',
+  '#ffffff',
 ];
 
-const BREITEN = [3, 8, 18];
+const BREITEN = [3, 8, 18, 34];
 
 @Component({
   selector: 'app-scribble',
-  imports: [ButtonModule, Zeichenflaeche],
+  imports: [Zeichenflaeche],
   templateUrl: './scribble.html',
   styleUrl: './scribble.scss',
 })
@@ -76,6 +86,7 @@ export class Scribble implements OnInit, OnDestroy {
 
   protected readonly farbe = signal(FARBEN[0]);
   protected readonly breite = signal(BREITEN[1]);
+  protected readonly werkzeug = signal<Malart>('strich');
   protected readonly eingabe = signal('');
 
   /**
@@ -110,13 +121,11 @@ export class Scribble implements OnInit, OnDestroy {
 
     this.abmelden = [
       // Die Zeichnung als Ganzes -- beim Betreten, nach Leeren und Zurück.
-      this.realtime.horchen<{ striche: Strich[] }>('scribble:striche', ({ striche }) =>
+      this.realtime.horchen<{ striche: Malzug[] }>('scribble:striche', ({ striche }) =>
         this.flaeche()?.setzen(striche),
       ),
-      // Einzelne Punkte waehrend des Zeichnens.
-      this.realtime.horchen<Strich>('scribble:strich', (strich) =>
-        this.flaeche()?.ergaenzen(strich),
-      ),
+      // Einzelne Punkte waehrend des Zeichnens, oder eine Füllung.
+      this.realtime.horchen<Malzug>('scribble:strich', (zug) => this.flaeche()?.ergaenzen(zug)),
       this.realtime.horchen<Nachricht>('scribble:chat', (nachricht) =>
         this.chat.update((alt) => [...alt, nachricht].slice(-60)),
       ),
@@ -203,6 +212,24 @@ export class Scribble implements OnInit, OnDestroy {
     return this.maske();
   });
 
+  /**
+   * Das Wort in einzelne Zeichen zerlegt.
+   *
+   * Als eine Zeichenkette waere nicht zu erkennen, welche Buchstaben schon
+   * aufgedeckt sind -- und genau das ist beim Raten die Information, auf die
+   * alle schauen. Deshalb je Zeichen ein Kaestchen: Luecken bekommen einen
+   * Strich, aufgedeckte Buchstaben stehen darueber.
+   */
+  protected readonly wortZeichen = computed(() => {
+    return [...this.wortAnzeige()].map((zeichen) => ({
+      zeichen: zeichen === '_' ? '' : zeichen,
+      luecke: zeichen === '_',
+      // Wortgrenzen bleiben als Abstand sichtbar: "Team Rocket" ist leichter
+      // zu raten, wenn man sieht, dass es zwei Woerter sind.
+      trenner: zeichen === ' ',
+    }));
+  });
+
   protected readonly zugPunkte = computed(() => {
     const ergebnis = this.spielZustand()?.ergebnis ?? {};
 
@@ -218,8 +245,19 @@ export class Scribble implements OnInit, OnDestroy {
     this.realtime.senden('wort:waehlen', { wort });
   }
 
-  protected strichSenden(strich: Strich): void {
-    this.realtime.senden('zeichnen:strich', strich);
+  protected malzugSenden(zug: Malzug): void {
+    this.realtime.senden('zeichnen:strich', zug);
+  }
+
+  /**
+   * Nach dem Fuellen zurueck zum Stift.
+   *
+   * Der Eimer ist fast immer ein einzelner Handgriff -- eine Flaeche zu, dann
+   * weiterzeichnen. Bliebe er stehen, waere der naechste Strich ein
+   * versehentlicher zweiter Eimer, und der ist nur mit „Zurück" zu beheben.
+   */
+  protected werkzeugWaehlen(neu: Malart): void {
+    this.werkzeug.set(neu);
   }
 
   protected zurueck(): void {

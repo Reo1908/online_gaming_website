@@ -141,12 +141,12 @@ apps/
     prisma/     Schema und Migrationen
     src/
       lib/      Datenbank, Passwörter, Sessions, Guards, Partien, Sockets
-      games/    Je Spielart ein Ordner: buzzer, scribble
+      games/    Je Spielart ein Ordner: buzzer, scribble, ausbruch
       routes/   health, auth, leaderboard, matches, tags, admin, support
   web/          Angular 21 + PrimeNG
     src/app/
       core/     Services, Guards, Interceptor, Typen
-      games/    Je Spielart eine Komponente: buzzer, scribble
+      games/    Je Spielart eine Komponente: buzzer, scribble, ausbruch
       pages/    home, login, partie, leaderboard, profile, admin, status
 ```
 
@@ -243,18 +243,32 @@ Wer eine Lobby oeffnet, leitet sie: Die Spielleitung waehlt das Spiel, vergibt
 einen Namen und stellt ein, was das Spiel hergibt. Die Lobby zeigt einen
 sechsstelligen Code, mit dem die anderen beitreten, solange sie wartet.
 
-Zwei Einstellungen gelten fuer jede Spielart:
+Dazu kommen zwei Einstellungen ausserhalb der Spielregeln:
 
 - **Privat oder oeffentlich.** Privat ist die Vorgabe: Nur wer den Code hat,
   kommt herein. Eine oeffentliche Lobby steht dagegen fuer alle Angemeldeten
   auf der Startseite. Umstellen laesst sich das, solange die Lobby wartet.
-- **Themen.** Etiketten wie „Pokemon" oder „League of Legends" sagen, worum es
-  in der Runde geht — und liefern bei Scribble die Woerter, aus denen gezogen
-  wird. Mehrere sind erlaubt; ohne Auswahl zaehlen alle. Angelegt werden sie
-  von einem Administrator unter `/admin` im Reiter „Themen".
+- **Themen.** Etiketten wie „Pokemon" oder „League of Legends" liefern die
+  Woerter, aus denen Scribble zieht. Mehrere sind erlaubt; ohne Auswahl zaehlen
+  alle. Angelegt werden sie von einem Administrator unter `/admin` im Reiter
+  „Themen".
+
+  Themen gibt es **nur bei Spielarten, die Woerter daraus ziehen** — am Buzzer
+  waeren sie ein Etikett ohne Wirkung, und ein Schalter, der nichts tut, ist
+  schlimmer als keiner. Die Oberflaeche blendet die Auswahl entsprechend aus,
+  der Server lehnt sie ab (`brauchtWoerter` am Spielmodul).
 
 Gewertet wird ab zwei Mitspielenden — sonst gewaenne ein einzelner Spieler jede
 Partie gegen sich selbst.
+
+Wie gewertet wird, sagt die Spielart. Im Wettkampf — Buzzer, Scribble — gewinnt
+die hoechste Punktzahl, bei Gleichstand an der Spitze steht es unentschieden.
+Eine Spielart mit `gemeinsameWertung` kennt dagegen keine Einzelwertung: Beim
+Ausbruch haben ohnehin alle dieselben Punkte, und die Frage ist nicht, wer vorn
+liegt, sondern ob die Runde herausgekommen ist. Dort bekommt jeder Mitspielende
+dasselbe Ergebnis — welches, sagt das Spiel selbst mit `ctx.beenden({ erfolg })`.
+In der Rangliste heisst ein solcher Sieg deshalb: *diese Runde* hat es
+geschafft, nicht *diese Person* war die beste.
 
 ### Buzzer
 
@@ -278,18 +292,37 @@ die Zeit um ist oder alle das Wort haben. Danach steht die Aufloesung sechs
 Sekunden lang da. Nach der letzten Runde endet die Partie von selbst und
 schreibt die Wertung fest — niemand muss sie abpfeifen.
 
-Das Punktesystem ist an scribble.io angelehnt, aber bewusst schlichter:
+Die Punkte haengen allein an der Reihenfolge des Ratens:
 
 | | Punkte |
 |---|---|
 | Erster, der errät | die volle Basis (Vorgabe 100) |
-| Jeder weitere | 20 % weniger, mindestens 40 % der Basis |
+| Letzter, der errät | 40 % der Basis |
+| Alle dazwischen | gleichmaessig gestaffelt |
 | Zeichner | ein Viertel der Basis je Treffer, hoechstens die volle Basis |
 
-Dort haengt die Punktzahl auf die Sekunde genau an der Restzeit — das rechnet
-niemand im Kopf nach. Hier zaehlt allein die Reihenfolge, und die kann jeder
-am Tisch mitzaehlen. Der Deckel beim Zeichner ist kein Detail: Ohne ihn lohnte
-es sich, in einer grossen Runde ein besonders leichtes Wort zu nehmen.
+Bei drei Ratenden sind das 100 / 70 / 40, bei fuenf 100 / 85 / 70 / 55 / 40.
+
+Zwei Entscheidungen dahinter. **Die Stufe haengt an der Rundengroesse, nicht
+an einer festen Zahl.** Mit einem festen Abzug je Platz — etwa 20 Punkte —
+stiesse eine grosse Runde nach vier Leuten auf den Mindestanteil, und ab da
+bekaeme jeder dasselbe; genau dort ist die Reihenfolge aber noch spannend.
+**Und der Deckel beim Zeichner ist kein Detail:** Ohne ihn lohnte es sich, in
+einer grossen Runde ein besonders leichtes Wort zu nehmen.
+
+Bei scribble.io haengt die Punktzahl auf die Sekunde genau an der Restzeit.
+Das rechnet niemand im Kopf nach — die Reihenfolge dagegen zaehlt jeder am
+Tisch mit, und sie belohnt dasselbe: schnell erkennen.
+
+Gezeichnet wird mit Stift oder Farbeimer, in zwoelf Farben und vier Staerken.
+Der Eimer laeuft mit einer Toleranz von rund 48 Stufen je Farbkanal: Der
+Browser zeichnet Linien mit weichen Kanten, und ohne diese Toleranz liefe die
+Farbe genau bis an den Saum und liesse einen hellen Rand stehen.
+
+Striche und Fuellungen stehen in **einer** Liste, weil ihre Reihenfolge zaehlt
+— wer erst fuellt und dann zeichnet, bekommt ein anderes Bild als umgekehrt.
+Wer neu laedt, bekommt diese Liste als Ganzes und spielt sie in derselben
+Reihenfolge nach.
 
 Geraten wird in einen Chat. Verglichen wird ohne Ruecksicht auf Gross- und
 Kleinschreibung, Umlaute und Bindestriche — „PIKACHU" und „pikachu" sind
@@ -297,6 +330,86 @@ dasselbe Wort. Wer getroffen hat, darf weiterreden, aber nur noch mit denen,
 die das Wort ebenfalls haben: Sonst tippt der Zeichner die Loesung in den Raum.
 In der zweiten Haelfte eines Zuges fallen nach und nach einzelne Buchstaben,
 hoechstens die Haelfte des Wortes.
+
+### Ausbruch
+
+Das erste Spiel, das nicht gegeneinander laeuft. Der Sektor ist verriegelt,
+davor liegt eine Reihe von **Schleusen**. An jeder steht einer am **Pult** und
+sieht die Anlage; alle anderen halten die **Unterlagen** dazu und sehen das
+Pult nicht. Keine der beiden Haelften fuehrt allein zur Loesung.
+
+Vier Arten von Schleusen gibt es, jede bei jedem Auftritt neu gewuerfelt:
+
+| Schleuse | Am Pult | In den Unterlagen |
+|---|---|---|
+| **Sicherungskasten** | Kabel mit Farbe und Stern | Nummerierte Regeln, der Reihe nach zu pruefen |
+| **Symbolschloss** | Zeichen ohne Namen | Spalten voller Zeichen — genau eine enthaelt alle |
+| **Wartungsschacht** | Ein Punkt, keine einzige Wand | Je ein Streifen der Karte |
+| **Zahlenschloss** | Seriennummer und Lampen | Je eine Stelle des Codes samt Rechenregel |
+
+Die Reihenfolge ist gemischt, aber nie zweimal dieselbe Art hintereinander:
+Bei reinem Zufall kaeme derselbe Kasten zweimal, und die zweite Schleuse waere
+dieselbe Rechnung mit anderen Zahlen.
+
+Fuenf Entscheidungen tragen das Spiel:
+
+- **Ein Zeitkonto statt einer Uhr je Schleuse.** Die eingestellten Sekunden
+  gelten fuer alle Schleusen zusammen. Wer schnell ist, spart fuer spaeter --
+  und ein Fehlalarm ist keine verlorene Schleuse, sondern eine Hypothek.
+  Waehrend „Schleuse offen" dasteht, steht die Uhr still: fuer einen
+  Bildschirm ohne Aufgabe soll niemand zahlen.
+- **Ein Fehlalarm kostet Zeit und wuerfelt neu.** Der Kasten bestueckt sich
+  neu, das Zahlenschloss wechselt Seriennummer und Lampen. Ohne das waere ein
+  falsches Kabel ein Ausschlussverfahren -- bei fuenf Kabeln haette man es
+  nach vier Versuchen.
+- **Die Bedienung wandert.** Nach jeder Schleuse steht jemand anderes am Pult.
+  Bliebe einer dauerhaft dort, waere er der Spieler und der Rest sein
+  Handbuch. Abschalten laesst es sich trotzdem -- dann bedient die Leitung.
+- **Der Funk ist schmalbandig.** Zwischen zwei Funkspruechen liegt eine Pause
+  (Vorgabe drei Sekunden). Das ist kein Schutz vor Spam, sondern die
+  Spielregel: Ohne Sperre tippt jemand seine Unterlagen ab, und aus dem
+  gemeinsamen Raetsel wird eine Einzelarbeit mit Publikum. Wer nebenbei redet,
+  stellt sie auf null.
+- **Gewonnen wird gemeinsam.** Alle haben dieselbe Punktzahl -- hundert je
+  offener Schleuse, dazu die uebrige Zeit als Bonus. Am Ende bekommt jeder
+  dasselbe Ergebnis: draussen oder nicht. Die Rangliste entscheidet damit
+  nicht, wer besser war, sondern wie oft eine Runde es geschafft hat.
+
+#### Normal und schwer
+
+Der schwere Modus ist kein Regler an denselben Raetseln, sondern sind andere:
+
+| | Normal | Schwer |
+|---|---|---|
+| Sicherungskasten | Regeln ueber Farben und Sterne | dazu eine **Modulnummer** am Pult und Bedingungen, die zu zaehlen statt zu sehen sind: „mehr blaue als rote", „zwei gruene nebeneinander" |
+| Symbolschloss | Zeichen aus allen Familien — ein Stern, ein Buchstabe, ein Herz | alle Zeichen aus **einer** Familie; „ein Stern" sagt dann nichts mehr |
+| Wartungsschacht | Punkt und Luke sichtbar | die **Luke fehlt am Pult**, und in den Sackgassen liegen **Sensoren**, die nur die Unterlagen kennen |
+| Zahlenschloss | jede Stelle haengt an der Anlage | manche Stellen haengen **an anderen Stellen** — die Leser reden nicht mehr nur mit dem Pult, sondern miteinander |
+
+Zwei Dinge dabei sind kein Zufall. Die Sensoren liegen **nie** auf dem Weg zur
+Luke: Wer fragt, kommt an ihnen vorbei, wer losgeht, tritt hinein -- aus einer
+Warnung wuerde sonst eine Maut. Und eine verkettete Codestelle zeigt immer nur
+nach hinten; im Kreis kaeme niemand an.
+
+Innerhalb einer Partie wird es zusaetzlich nach hinten heraus mehr: mehr Kabel,
+groesserer Schacht, laengerer Code. Eine eigene Einstellung braucht es dafuer
+nicht -- die Nummer der Schleuse genuegt.
+
+#### Einstellungen
+
+| | Vorgabe | Wofuer |
+|---|---|---|
+| Schwierigkeit | normal | siehe oben |
+| Schleusen | 5 | wie viele Raetsel zwischen euch und draussen liegen |
+| Sekunden je Schleuse | 90 | mal der Anzahl ergibt das Zeitkonto |
+| Strafe je Fehlalarm | 20 s | was ein falscher Griff kostet |
+| Bedienung wechselt | ja | ob das Pult nach jeder Schleuse weiterwandert |
+| Funkpause | 3 s | Abstand zwischen zwei Funkspruechen |
+
+Verliert der Bediener mitten in der Schleuse die Verbindung, kann die Runde
+sonst nur zusehen, wie die Uhr ablaeuft. Deshalb darf die Spielleitung das Pult
+jederzeit weiterreichen: Der Abgeloeste bekommt die Unterlagen dessen, der
+uebernimmt, alle anderen behalten ihre.
 
 ### Der Live-Teil
 
@@ -333,15 +446,27 @@ Liste `SPIELE` in `games/index.ts`. Das Modul bringt mit:
 - **`ereignisse`**: was es aus dem Browser annimmt. `lib/realtime.ts` reicht
   alles durch, was es nicht selbst kennt — dort ist keine Zeile zu aendern;
 - **`leitungSpieltMit`** und **`minZumStart`**: ob die Leitung gewertet wird
-  und ab wie vielen Mitspielenden es losgeht.
+  und ab wie vielen Mitspielenden es losgeht;
+- **`brauchtWoerter`**: ob die Lobby Themen zur Auswahl stellt;
+- **`gemeinsameWertung`** (optional): ob alle zusammen gewinnen oder verlieren.
 
 Kommt das Spiel von selbst ans Ende, ruft es `ctx.beenden()`; laeuft es bis
-zum Abpfiff, tut es nichts und die Leitung drueckt auf „Partie beenden".
+zum Abpfiff, tut es nichts und die Leitung drueckt auf „Partie beenden". Ein
+Spiel mit gemeinsamer Wertung reicht dabei durch, wie es ausgegangen ist:
+`ctx.beenden({ erfolg: true })`.
 
 Im Browser kommt eine Komponente unter `apps/web/src/app/games/` dazu, ein
-Eintrag in `games/registry.ts` (welche Einstellungsfelder es gibt und ob die
-Partie von Hand endet) und ein Zweig im `@switch` in `pages/partie/partie.html`.
-Die Tabelle `Game` gleicht sich beim Start von selbst ab.
+Eintrag in `games/registry.ts` und ein Zweig im `@switch` in
+`pages/partie/partie.html`. Die Tabelle `Game` gleicht sich beim Start von
+selbst ab.
+
+Im Registry steht, was die Oberflaeche vor der Partie wissen muss: die
+Einstellungsfelder (`zahl`, `schalter` oder `auswahl` mit Knopfreihe), das
+Zeichen und die Art fuer die Kachel in der Spielauswahl, ab wie vielen
+Mitspielenden der Startknopf aufwacht, ob die Partie von Hand endet, ob es
+Themen gibt und ob die Spielart die volle Breite nimmt. Die **Standardwerte**
+stehen bewusst nicht dort, sondern kommen mit `/api/games` aus dem Zod-Schema
+des Servers — sonst liefen sie irgendwann auseinander.
 
 ---
 

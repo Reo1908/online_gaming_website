@@ -171,8 +171,8 @@ function kontext(code: string, ausloeser?: PartieSocket): SpielKontext {
       });
     },
 
-    async beenden() {
-      const ergebnis = await partieAbschliessen(code);
+    async beenden(ergebnisAngabe) {
+      const ergebnis = await partieAbschliessen(code, ergebnisAngabe?.erfolg);
       if (!ergebnis) return;
 
       // Erst senden, dann wegraeumen: Sonst steht der Endstand niemandem mehr
