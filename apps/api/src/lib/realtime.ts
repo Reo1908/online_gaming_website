@@ -22,6 +22,8 @@ interface SocketDaten {
   user: SessionUser;
   code?: string;
   istLeitung?: boolean;
+  /** Steht seit `partie:betreten` fest -- spart die Datenbankabfrage bei jedem Ereignis. */
+  spielSlug?: string;
 }
 
 type PartieSocket = Socket & { data: SocketDaten };
@@ -280,6 +282,7 @@ export function realtimeStarten(app: FastifyInstance): Server {
 
       socket.data.code = partie.code;
       socket.data.istLeitung = eintrag.isGamemaster;
+      socket.data.spielSlug = partie.game.slug;
       sockets(partie.code).add(socket);
 
       await liveZustandSenden(partie.code);
@@ -300,14 +303,12 @@ export function realtimeStarten(app: FastifyInstance): Server {
       if (ereignis === 'partie:betreten') return;
 
       const code = socket.data.code;
-      if (!code) return;
+      const spielSlug = socket.data.spielSlug;
+      if (!code || !spielSlug) return;
 
-      const partie = await prisma.match.findUnique({
-        where: { code },
-        select: { game: { select: { slug: true } } },
-      });
-
-      const behandeln = partie && spielart(partie.game.slug)?.ereignisse[ereignis];
+      // Steht seit dem Beitritt fest und aendert sich fuer die Partie nie --
+      // eine Datenbankabfrage je Ereignis waere hier reine Verschwendung.
+      const behandeln = spielart(spielSlug)?.ereignisse[ereignis];
       if (!behandeln) return;
 
       try {
