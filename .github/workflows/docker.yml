@@ -32,20 +32,20 @@ jobs:
             context: ./apps/web
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Image-Namen bestimmen
         # Registry-Namen muessen komplett kleingeschrieben sein, der
         # GitHub-Benutzername ist es oft nicht.
         run: echo "IMAGE=${GITHUB_REPOSITORY,,}-${{ matrix.name }}" >> "$GITHUB_ENV"
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       - name: An der Registry anmelden
         # Bei einem Pull Request wird nur gebaut, nicht veroeffentlicht --
         # deshalb ist die Anmeldung dort nicht noetig.
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -54,7 +54,7 @@ jobs:
 
       - name: Tags und Metadaten ableiten
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE }}
           tags: |
@@ -65,7 +65,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Bauen und hochladen
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
           push: ${{ github.event_name != 'pull_request' }}
