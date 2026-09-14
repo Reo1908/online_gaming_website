@@ -558,6 +558,33 @@ Ausstellungsgrenzen von Let's Encrypt.
 `IMAGE_TAG` in der `.env` bestimmt die Version. Zurückrollen heißt: alten Tag
 eintragen, Befehle wiederholen.
 
+#### Deploy per Knopfdruck
+
+Dieselben Befehle laufen auch über GitHub: **Actions → Deploy → *Run
+workflow***. Der Workflow meldet sich per SSH als Benutzer `deploy` am Server
+an; den privaten Schlüssel dafür hält GitHub als Secret `DEPLOY_SSH_KEY`.
+
+Wichtig zum Verständnis: Der Workflow *schickt* die Deploy-Befehle nicht. In der
+`authorized_keys` des `deploy`-Benutzers steht vor dem Schlüssel ein
+`command="/home/deploy/deploy.sh",restrict`. Damit verwirft sshd jeden Befehl,
+den der Runner mitschickt, und führt stattdessen immer genau dieses Skript aus.
+Selbst wenn das Secret einmal ausliefe, ließe sich damit nichts anderes starten
+— kein Shell-Zugang, keine Weiterleitungen.
+
+Das Skript liegt bewusst **außerhalb** des Checkouts: `/home/deploy/deploy.sh`,
+der Checkout selbst unter `/home/deploy/apps/`. Läge es im Repo, überschriebe
+`git pull` genau die Datei, auf die der Schlüssel festgelegt ist — aus „dieser
+Schlüssel kann nur deployen“ würde „dieser Schlüssel führt aus, was gerade in
+`main` steht“. Der `deploy`-Benutzer ist in der `docker`-Gruppe und damit
+praktisch root.
+
+Inhaltlich ist es `git pull --ff-only` plus die beiden Compose-Befehle von oben,
+davor ein `unset DOCKER_HOST`: zeigte die Variable einmal auf den
+podman-Socket, findet `docker compose` seine Container nicht mehr.
+
+> Deploy-Schritte ändern heißt deshalb: `/home/deploy/deploy.sh` auf dem Server
+> bearbeiten, nicht `.github/workflows/deploy.yml`.
+
 #### Ersten Administrator anlegen
 
 Migrationen laufen bei jedem Start von allein, der erste Benutzer nicht — auf
