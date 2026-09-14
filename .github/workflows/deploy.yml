@@ -1,0 +1,29 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: SSH-Verbindung vorbereiten
+        # Der Server-Fingerabdruck steht hier fest eingetragen statt per
+        # ssh-keyscan beim Lauf geholt zu werden -- so wird bei jedem Deploy
+        # wirklich der richtige Server geprueft, nicht nur "irgendeiner, der
+        # gerade unter der IP antwortet".
+        run: |
+          mkdir -p ~/.ssh
+          echo "2.28.232.198 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJlf6HJI95hEcQR4fY4BLsWxdiNG1EDhJynX9DJaY+Wi" >> ~/.ssh/known_hosts
+          install -m 600 /dev/null ~/.ssh/deploy_key
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+
+      - name: Deploy anstossen
+        # Der Befehl hier ist nur Dokumentation: Der Server erzwingt ueber
+        # "command=" in authorized_keys ohnehin sein eigenes Deploy-Skript,
+        # egal was dieser SSH-Client zu senden versucht.
+        run: ssh -o StrictHostKeyChecking=yes -i ~/.ssh/deploy_key deploy@2.28.232.198 deploy
